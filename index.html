@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Neugierwürfel">
+<title>Neugierwürfel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#0d0f21">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Unbounded:wght@500;700;800&display=swap">
+<style>
+/* Layout: Vollbild-Bühne mit schwebendem Würfel im Lichtkegel; oben Münz-HUD mit Schichtleiste, unten Dock; Werkstatt als Bottom-Sheet */
+:root{
+  --ink:#0d0f21;
+  --stage:#1a1d3a;
+  --spot:#2f356a;
+  --panel:rgba(21,24,49,.86);
+  --panel-solid:#15183a;
+  --line:rgba(186,194,255,.15);
+  --wash:rgba(255,255,255,.05);
+  --fg:#eef0fb;
+  --muted:#9ca2c6;
+  --gold:#f3c45b;
+  --gold-hi:#ffe39a;
+  --gold-deep:#b98a26;
+  --gold-ink:#2a1d04;
+  --cyan:#9fe6ff;
+  --warn:#ff9180;
+  --layer:#e8e5dc;
+  --f-display:'Unbounded', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  --f-body:'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+[hidden]{display:none!important}
+body{
+  background:radial-gradient(130% 85% at 50% 50%, var(--spot) 0%, var(--stage) 36%, var(--ink) 100%) fixed, var(--ink);
+  color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.35;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
+}
+button{font:inherit;color:inherit;touch-action:manipulation}
+body{touch-action:manipulation}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+
+/* HUD */
+.hud{position:fixed;top:0;left:0;right:0;z-index:5;pointer-events:none;display:grid;gap:12px;
+  padding-top:calc(env(safe-area-inset-top,0px) + 12px);
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));
+  background:linear-gradient(180deg, rgba(13,15,33,.72) 0%, rgba(13,15,33,.38) 70%, rgba(13,15,33,0) 100%);padding-bottom:18px}
+.hud-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.purse{display:flex;align-items:center;gap:10px;min-width:0}
+.purse .coin{width:30px;height:30px;flex:none;filter:drop-shadow(0 3px 8px rgba(243,196,91,.35))}
+.coins{font-family:var(--f-display);font-weight:700;font-size:27px;line-height:1.05;letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rate{font-size:13px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rate b{color:var(--cyan);font-weight:600}
+.tools{display:flex;gap:8px;align-items:center;pointer-events:auto;flex:none}
+.badge{font-family:var(--f-display);font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 10px;white-space:nowrap}
+.pill{font-family:var(--f-display);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-ink);background:var(--gold);border-radius:999px;padding:6px 10px;white-space:nowrap;animation:pulse 1s ease-in-out infinite alternate}
+@keyframes pulse{to{box-shadow:0 0 18px rgba(243,196,91,.7)}}
+.icon-btn{width:42px;height:42px;border-radius:13px;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center;cursor:pointer;padding:0;flex:none}
+.icon-btn:active{transform:scale(.95)}
+.strata{display:grid;gap:6px;font-size:12.5px;color:var(--muted)}
+.strata-top,.strata-bot{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.strata-top b{color:var(--fg);font-weight:600}
+.strata-top span:first-child{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.swatch{width:11px;height:11px;border-radius:3px;background:var(--layer);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);flex:none}
+.bar{height:6px;border-radius:99px;background:var(--wash);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--layer);border-radius:inherit;transition:width .25s ease}
+
+/* Dock */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:6;pointer-events:none;display:grid;grid-template-columns:56px minmax(0,300px) 56px;justify-content:center;align-items:center;gap:14px;
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+.dock > *{pointer-events:auto}
+.dock .icon-btn{width:56px;height:56px;border-radius:18px}
+.shop-btn{height:56px;width:100%;max-width:300px;justify-self:center;border-radius:18px;border:0;cursor:pointer;position:relative;
+  background:linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 55%, var(--gold-deep) 100%);color:var(--gold-ink);
+  font-family:var(--f-display);font-weight:700;font-size:15px;letter-spacing:.02em;
+  box-shadow:0 8px 26px rgba(243,196,91,.22), inset 0 1px 0 rgba(255,255,255,.55)}
+.shop-btn:active{transform:translateY(1px) scale(.99)}
+.shop-btn .dot{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:var(--cyan);border:3px solid var(--ink)}
+.blast{width:56px;height:56px;border-radius:50%;border:1px solid var(--line);background:var(--panel);position:relative;display:grid;place-items:center;cursor:pointer;padding:0}
+.blast svg.ring{position:absolute;inset:-1px;width:56px;height:56px;transform:rotate(-90deg)}
+.blast svg.ring circle{fill:none;stroke-width:3}
+.blast .track{stroke:var(--wash)}
+.blast .prog{stroke:var(--warn);stroke-linecap:round;transition:stroke-dashoffset .2s linear}
+.blast.ready{color:var(--warn)}
+.blast.armed{background:var(--warn);color:var(--ink);box-shadow:0 0 0 6px rgba(255,145,128,.25)}
+.blast.locked{color:var(--muted);opacity:.7}
+.combo{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 88px);transform:translateX(-50%);z-index:6;pointer-events:none;
+  font-family:var(--f-display);font-size:12px;letter-spacing:.05em;text-transform:uppercase;background:var(--panel);border:1px solid var(--line);padding:7px 13px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.combo b{color:var(--gold);font-weight:700}
+
+/* Sheets */
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;max-height:68%;display:flex;flex-direction:column;background:var(--panel-solid);
+  border-top:1px solid var(--line);border-radius:22px 22px 0 0;transform:translateY(105%);
+  box-shadow:0 -24px 60px rgba(0,0,0,.45);visibility:hidden;transition:transform .32s cubic-bezier(.2,.8,.2,1), visibility 0s linear .32s}
+.sheet.open{transform:none;visibility:visible;transition:transform .32s cubic-bezier(.2,.8,.2,1), visibility 0s linear 0s}
+.sheet-head{display:flex;align-items:center;gap:10px;padding-block:14px 10px;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+.sheet-head h2{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0;flex:1;min-width:0}
+.sheet-head .icon-btn{width:38px;height:38px}
+.sheet-body{overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:grid;gap:8px;align-content:start;
+  padding-block:4px calc(env(safe-area-inset-bottom,0px) + 18px);
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+.seg{display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;flex:none}
+.seg button{border:0;background:transparent;padding:7px 10px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;font-variant-numeric:tabular-nums}
+.seg button.on{background:var(--wash);color:var(--fg)}
+.up{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 10px 10px 12px;border-radius:15px;background:var(--wash);border:1px solid var(--line)}
+.up.locked{opacity:.45}
+.up-ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--wash);color:var(--gold)}
+.up-name{font-weight:600;font-size:15px;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.up-name small{color:var(--muted);font-weight:500;font-size:12px;font-variant-numeric:tabular-nums}
+.up-eff{font-size:12.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.buy{min-width:98px;height:44px;border-radius:12px;border:0;cursor:pointer;background:var(--gold);color:var(--gold-ink);font-weight:700;font-size:14px;
+  display:flex;align-items:center;justify-content:center;gap:6px;padding:0 12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.buy svg{width:15px;height:15px}
+.buy small{font-weight:600;opacity:.75}
+.buy:disabled{background:var(--wash);color:var(--muted);cursor:default}
+.buy:not(:disabled):active{transform:scale(.97)}
+.stats{display:grid;grid-template-columns:1fr auto;gap:10px 16px;margin:0;font-variant-numeric:tabular-nums}
+.stats dt{color:var(--muted)}
+.stats dd{margin:0;text-align:right;font-weight:600}
+.section-label{font-family:var(--f-display);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.danger{height:46px;border-radius:13px;border:1px solid rgba(255,145,128,.4);background:transparent;color:var(--warn);font-weight:600;cursor:pointer}
+.confirm-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.confirm-row button{height:46px;border-radius:13px;font-weight:600;cursor:pointer}
+.confirm-row .yes{background:var(--warn);color:var(--ink);border:0}
+.confirm-row .no{background:transparent;border:1px solid var(--line)}
+.muted-note{font-size:12.5px;color:var(--muted);line-height:1.5;margin:0}
+
+/* Toasts, Popups, Modals */
+.toasts{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 148px);z-index:8;pointer-events:none;display:grid;justify-items:center;gap:8px;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+.toast{background:var(--panel);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);padding:10px 15px;border-radius:14px;font-size:14px;max-width:340px;text-align:center;
+  animation:tIn .3s ease both, tOut .45s ease forwards;animation-delay:0s, var(--hold,2.6s)}
+.toast b{color:var(--gold)}
+.toast.gold{border-color:rgba(243,196,91,.55);box-shadow:0 0 30px rgba(243,196,91,.2)}
+@keyframes tIn{from{opacity:0;transform:translateY(-8px) scale(.97)}}
+@keyframes tOut{to{opacity:0;transform:translateY(-6px)}}
+.pop{position:fixed;z-index:7;pointer-events:none;font-family:var(--f-display);font-weight:700;font-size:15px;color:var(--gold);
+  text-shadow:0 2px 10px rgba(0,0,0,.7);transform:translate(-50%,-50%);animation:pop .9s ease-out forwards;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pop.big{font-size:20px;color:var(--gold-hi)}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}15%{opacity:1;transform:translate(-50%,-75%) scale(1.06)}100%{opacity:0;transform:translate(-50%,-200%) scale(1)}}
+.veil{position:fixed;inset:0;z-index:30;background:rgba(6,7,18,.62);display:grid;grid-template-columns:minmax(0,1fr);place-items:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+  padding-block:24px;padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));animation:tIn .3s ease}
+.card{width:100%;max-width:420px;box-sizing:border-box;background:var(--panel-solid);border:1px solid var(--line);border-radius:22px;padding:22px 20px 20px;display:grid;gap:14px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.card .eyebrow{font-family:var(--f-display);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.card h2{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.2;margin:0;text-wrap:balance}
+.card p{margin:0;line-height:1.55}
+.card .meta{color:var(--muted);font-size:13px}
+.card .big-num{font-family:var(--f-display);font-weight:700;font-size:24px;color:var(--gold);font-variant-numeric:tabular-nums}
+.primary{height:52px;border-radius:15px;border:0;cursor:pointer;background:linear-gradient(180deg, var(--gold-hi), var(--gold) 60%, var(--gold-deep));color:var(--gold-ink);font-family:var(--f-display);font-weight:700;font-size:15px}
+.hint{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);transform:translateX(-50%);z-index:6;pointer-events:none;width:min(340px, calc(100% - 32px));
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:13px 15px;font-size:14px;line-height:1.45;text-align:center;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s}
+.hint b{color:var(--gold)}
+.hint small{display:block;color:var(--muted);font-size:12.5px;margin-top:4px}
+.nogl{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding-inline:24px;color:var(--muted)}
+.veil.low{align-items:end;background:linear-gradient(180deg, rgba(6,7,18,0) 30%, rgba(6,7,18,.7) 100%);-webkit-backdrop-filter:none;backdrop-filter:none;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 20px)}
+@media (min-width:700px){ .coins{font-size:32px} .strata{max-width:560px} }
+@media (prefers-reduced-motion: reduce){ .pill{animation:none} .sheet{transition:none} }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="Der Würfel. Tippen klopft Würfelchen ab, Ziehen dreht, zwei Finger zoomen."></canvas>
+
+<header class="hud">
+  <div class="hud-row">
+    <div class="purse">
+      <svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8.5 4.8v9.4L12 21.5l-8.5-4.8V7.3z" fill="var(--gold)"/><path d="M12 12l8.5-4.7v9.4L12 21.5z" fill="var(--gold-deep)"/><path d="M12 12L3.5 7.3 12 2.5l8.5 4.8z" fill="var(--gold-hi)"/></svg>
+      <div style="min-width:0">
+        <div class="coins" id="coins">0</div>
+        <div class="rate" id="rate">Tippe auf den Würfel</div>
+      </div>
+    </div>
+    <div class="tools">
+      <span class="pill" id="frenzy" hidden>Goldrausch</span>
+      <span class="badge" id="cubeBadge">Würfel 1</span>
+      <button class="icon-btn" id="menuBtn" aria-label="Logbuch öffnen"><svg class="i" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg></button>
+    </div>
+  </div>
+  <div class="strata">
+    <div class="strata-top"><span><i class="swatch"></i><span id="layerName">Schicht 1 von 10</span></span><span id="layerStats">Härte 1</span></div>
+    <div class="bar"><i id="layerBar"></i></div>
+    <div class="strata-bot"><span id="leftCount">–</span><span id="cubePct">0 % freigelegt</span></div>
+  </div>
+</header>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="combo" id="combo" hidden></div>
+<div class="hint" id="hint" hidden><b>Was ist im Würfel?</b> Tippe auf ihn und klopf ihn Würfelchen für Würfelchen ab.<small>Ziehen dreht · zwei Finger zoomen · Münzen gibst du in der Werkstatt aus</small></div>
+
+<nav class="dock">
+  <button class="icon-btn" id="soundBtn" aria-label="Ton ausschalten"></button>
+  <button class="shop-btn" id="shopBtn">Werkstatt<i class="dot" id="shopDot" hidden></i></button>
+  <button class="blast locked" id="blastBtn" aria-label="Sprengladung">
+    <svg class="ring" viewBox="0 0 56 56" aria-hidden="true"><circle class="track" cx="28" cy="28" r="25"/><circle class="prog" id="blastRing" cx="28" cy="28" r="25" stroke-dasharray="157.08" stroke-dashoffset="157.08"/></svg>
+    <span id="blastIco"></span>
+  </button>
+</nav>
+
+<section class="sheet" id="shop" aria-label="Werkstatt">
+  <div class="sheet-head">
+    <h2>Werkstatt</h2>
+    <div class="seg" role="group" aria-label="Kaufmenge">
+      <button id="amt1" data-amt="1" class="on">×1</button><button id="amt10" data-amt="10">×10</button><button id="amtMax" data-amt="max">Max</button>
+    </div>
+    <button class="icon-btn" id="shopClose" aria-label="Werkstatt schließen"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="shopList"></div>
+</section>
+
+<section class="sheet" id="menu" aria-label="Logbuch">
+  <div class="sheet-head">
+    <h2>Logbuch</h2>
+    <button class="icon-btn" id="menuClose" aria-label="Logbuch schließen"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="menuBody"></div>
+</section>
+
+<script>
+'use strict';
+(() => {
+const $ = id => document.getElementById(id);
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* =========================================================
+   Konfiguration
+   ========================================================= */
+const RADII = [0, 1, 1.5, 2.3, 3.2, 4.2, 5.2];
+const RAD_COUNT = RADII.map(r => { let c = 0; for (let x = -6; x <= 6; x++) for (let y = -6; y <= 6; y++) if (x*x + y*y <= r*r + 1e-6) c++; return c; });
+
+const ICO = {
+  dmg:   '<path d="M3.5 20.5l7-7"/><path d="M9 12l6-6 3 3-6 6z"/><path d="M15 6l2-2 3 3-2 2"/>',
+  rad:   '<rect x="9" y="9" width="6" height="6" rx="1"/><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/>',
+  drone: '<rect x="8.5" y="10" width="7" height="4.5" rx="1.5"/><path d="M8.5 12H5M15.5 12H19M3 9h4M17 9h4M12 14.5V18"/>',
+  ddmg:  '<path d="M7 4h10l-2 6H9z"/><path d="M10 10l2 10 2-10"/>',
+  dspd:  '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  gold:  '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
+  combo: '<path d="M3 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0"/>',
+  blast: '<path d="M12 2.5l1.8 5.4 5.4-2.6-2.6 5.4 5.4 1.8-5.4 1.8 2.6 5.4-5.4-2.6-1.8 5.4-1.8-5.4-5.4 2.6 2.6-5.4L2.5 12.5l5.4-1.8-2.6-5.4 5.4 2.6z"/>',
+  night: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  lock:  '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  sndOn: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  sndOff:'<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
+  coin:  '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="currentColor" stroke="none" opacity=".9"/>'
+};
+const svg = (k, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICO[k]}</svg>`;
+
+// Upgrades: Kosten = base * g^Stufe (oder feste Kostenliste)
+const UPS = [
+  { id:'dmg',   name:'Meißel',          base:20,   g:1.30, max:500, need:null },
+  { id:'rad',   name:'Breiter Meißel',  costs:[50, 1200, 16000, 240000, 4e6, 8e7], max:6, need:null },
+  { id:'drone', name:'Bohrdrohne',      base:80,   g:1.28, max:500, need:null },
+  { id:'ddmg',  name:'Diamantbohrer',   base:160,  g:1.30, max:500, need:'drone' },
+  { id:'dspd',  name:'Drohnentakt',     base:600,  g:2.00, max:15,  need:'drone' },
+  { id:'gold',  name:'Goldader',        base:1600, g:3.20, max:200, need:null },
+  { id:'combo', name:'Rhythmus',        base:300,  g:3.00, max:9,   need:null },
+  { id:'blast', name:'Sprengladung',    base:400,  g:2.40, max:10,  need:null },
+  { id:'night', name:'Nachtschicht',    base:500,  g:1.90, max:11,  need:'drone' },
+];
+
+// Materialien der Schichten (Farben 0..1)
+const THEMES = [
+  { n:'Kreide',      a:[.93,.92,.88], b:[.84,.83,.80], p:'noise' },
+  { n:'Schiefer',    a:[.38,.44,.53], b:[.29,.34,.43], p:'diag', w:2 },
+  { n:'Terrakotta',  a:[.80,.44,.29], b:[.68,.35,.23], p:'checker', w:3 },
+  { n:'Moos',        a:[.40,.57,.31], b:[.27,.43,.23], p:'blot' },
+  { n:'Kupfer',      a:[.82,.52,.31], b:[.47,.72,.62], p:'rings', w:2 },
+  { n:'Lapislazuli', a:[.17,.28,.64], b:[.93,.78,.36], p:'speck' },
+  { n:'Koralle',     a:[.97,.52,.46], b:[1.0,.75,.64], p:'stripes', w:2 },
+  { n:'Jade',        a:[.36,.67,.53], b:[.55,.80,.66], p:'rings', w:3 },
+  { n:'Amethyst',    a:[.53,.35,.74], b:[.72,.57,.90], p:'diamond', w:3 },
+  { n:'Bernstein',   a:[.93,.63,.19], b:[.78,.44,.11], p:'rings', w:1 },
+  { n:'Obsidian',    a:[.13,.13,.18], b:[.58,.64,.80], p:'speck' },
+  { n:'Türkis',      a:[.21,.71,.73], b:[.12,.52,.58], p:'diag', w:3 },
+  { n:'Rubin',       a:[.73,.11,.21], b:[.92,.32,.40], p:'diamond', w:2 },
+  { n:'Perlmutt',    a:[.90,.88,.93], b:[.90,.88,.93], p:'pearl' },
+  { n:'Smaragd',     a:[.07,.53,.33], b:[.21,.71,.46], p:'checker', w:2 },
+  { n:'Saphir',      a:[.13,.26,.76], b:[.31,.49,.93], p:'rings', w:2 },
+  { n:'Mondstein',   a:[.79,.83,.93], b:[.61,.69,.87], p:'blot' },
+];
+const CORE = { n:'Kern', a:[1.0,.80,.30], b:[1.0,.92,.62], p:'stripes', w:1 };
+
+const SECRETS = [
+  'Ein Kristall, kaum größer als ein Daumen. Er summt leise. In seinem Inneren dreht sich ein neuer Würfel, größer als dieser.',
+  'Ein gefalteter Zettel: „Du schon wieder?“ Darunter, in kleinerer Schrift: „Dann weiter.“',
+  'Ein Modell dieses Würfels im Maßstab 1:100. Es hat ein winziges Loch genau dort, wo du angefangen hast.',
+  'Nichts. Dann ein leises Klicken irgendwo hinter dir. Ein noch größerer Würfel ist erschienen.',
+  'Eine Münze mit deinem Fingerabdruck. Sie ist nichts wert. Du behältst sie trotzdem.',
+  'Wieder ein Kristall. Er wirkt zufrieden und ein bisschen neugierig auf dich.'
+];
+
+/* =========================================================
+   Spielzustand & Formeln
+   ========================================================= */
+const G = {
+  c: 0, layer: 0, coins: 0, total: 0,
+  L: { dmg:0, rad:0, drone:0, ddmg:0, dspd:0, gold:0, combo:0, blast:0, night:0 },
+  stats: { taps:0, removed:0, playSec:0, cubeSec:0, bestCombo:0 },
+  sound: true, intro: false, frenzy: 0
+};
+const cubeN    = c => Math.min(20 + 4*c, 36);
+const hpOf     = s => Math.max(1, Math.round(Math.pow(2.6, s) * Math.pow(6, G.c)));
+const valOf    = s => Math.max(1, Math.round(2 * Math.pow(2.2, s) * Math.pow(6, G.c)));
+const permCoin = () => Math.pow(1.5, G.c);
+const permDmg  = () => Math.pow(1.25, G.c);
+const ms       = l => Math.pow(2, Math.floor(l / 25));
+const dmgAt    = l => (l + 1) * ms(l) * permDmg();
+const tapDmg   = () => dmgAt(G.L.dmg);
+const droneDmgAt = l => (l + 1) * ms(l) * permDmg();
+const droneDmg = () => droneDmgAt(G.L.ddmg);
+const rateAt   = l => 0.5 * Math.pow(1.15, l);
+const droneRate= () => rateAt(G.L.dspd);
+const goldAt   = l => Math.pow(1.25, l) * permCoin();
+const coinMult = () => goldAt(G.L.gold);
+const capAt    = l => 10 + 10*l;
+const comboCap = () => capAt(G.L.combo);
+const blastRAt = l => 2.6 + 0.45*l;
+const blastMulAt = l => 6 + 3*l;
+const blastCdAt  = l => Math.max(12, 40 - 3*l);
+const nightAt  = l => 1 + l;
+const frenzyMul= () => G.frenzy > 0 ? 4 : 1;
+const droneIncome = () => (G.L.drone > 0 && !finished)
+  ? G.L.drone * droneRate() * Math.min(1, droneDmg() / hpOf(G.layer)) * valOf(G.layer) * coinMult() * frenzyMul() : 0;
+
+/* =========================================================
+   Formatierung
+   ========================================================= */
+const SUF = [[1e33,'Quint'],[1e30,'Qrd'],[1e27,'Quad'],[1e24,'Qua'],[1e21,'Trd'],[1e18,'Trio'],[1e15,'Brd'],[1e12,'Bio'],[1e9,'Mrd'],[1e6,'Mio'],[1e4,'Tsd']];
+function fmt(n) {
+  if (!isFinite(n)) return '∞';
+  const a = Math.abs(n);
+  if (a >= 1e36) return n.toExponential(2).replace('.', ',').replace('e+', 'e');
+  if (a < 10 && a % 1 > 0.05) return n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
+  for (const [v, s] of SUF) if (a >= v) {
+    const d = v === 1e4 ? 1e3 : v, x = n / d;
+    return x.toLocaleString('de-DE', { maximumFractionDigits: x < 10 ? 2 : x < 100 ? 1 : 0 }) + ' ' + s;
+  }
+  return Math.floor(n).toLocaleString('de-DE');
+}
+const fmtX = x => x.toLocaleString('de-DE', { maximumFractionDigits: x < 10 ? 2 : 1 });
+function fmtTime(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  if (h > 0) return `${h} Std ${m} Min`;
+  if (m > 0) return `${m} Min${s && m < 10 ? ` ${s} Sek` : ''}`;
+  return `${s} Sek`;
+}
+
+/* =========================================================
+   Würfelmodell: Voxel, Schichten, aktive Liste
+   ========================================================= */
+let N = 20, S = 10, N3 = 8000, HALF = 9.5;
+let alive, hp, shellOf, posIn, act, actLen = 0, col, colored, shellTotal = 0, cubeRemoved = 0;
+let finished = false, pendingDone = false, dirty = true, golden = -1, goldenLife = 0, goldenTimer = 40;
+let highlightWarned = false;
+let instA, instN, nCount = 0, aCount = 0;
+
+const shellCount = s => { const a = N - 2*s, b = Math.max(0, a - 2); return a*a*a - b*b*b; };
+const ix = i => i % N, jy = i => ((i / N) | 0) % N, kz = i => (i / (N*N)) | 0;
+
+function themeOf(s) { return s === S - 1 ? CORE : THEMES[(s + G.c * 5) % THEMES.length]; }
+
+function hash3(i, j, k) {
+  let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1103515245); h ^= h >>> 16;
+  return (h >>> 0) / 4294967295;
+}
+function hsl(h, s, l) {
+  const f = n => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l); return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return [f(0), f(8), f(4)];
+}
+function paintVoxel(idx, th) {
+  const i = ix(idx), j = jy(idx), k = kz(idx);
+  const x = i - HALF, y = j - HALF, z = k - HALF;
+  const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+  let a, b;
+  if (ax >= ay && ax >= az) { a = y; b = z; } else if (ay >= az) { a = x; b = z; } else { a = x; b = y; }
+  const w = th.w || 2, r = hash3(i, j, k);
+  let t = 0, c;
+  switch (th.p) {
+    case 'noise':   t = r < 0.14 ? 0.7 : 0; break;
+    case 'diag':    t = Math.floor((a + b + 200) / w) & 1; break;
+    case 'checker': t = (Math.floor((a + 200) / w) + Math.floor((b + 200) / w)) & 1; break;
+    case 'stripes': t = Math.floor((y + 200) / w) & 1; break;
+    case 'rings':   t = Math.floor(Math.max(Math.abs(a), Math.abs(b)) / w) & 1; break;
+    case 'diamond': t = Math.floor((Math.abs(a) + Math.abs(b)) / w) & 1; break;
+    case 'speck':   t = r < 0.13 ? 1 : 0; break;
+    case 'blot':    t = (Math.sin(x*.62) + Math.sin(y*.57 + 1.7) + Math.sin(z*.66 + 3.1)) > 0.7 ? 1 : 0; break;
+  }
+  if (th.p === 'pearl') c = hsl((a*0.035 + b*0.027 + y*0.02 + r*0.06 + 1) % 1, 0.42, 0.80);
+  else c = [th.a[0] + (th.b[0]-th.a[0])*t, th.a[1] + (th.b[1]-th.a[1])*t, th.a[2] + (th.b[2]-th.a[2])*t];
+  const v = 0.95 + 0.10 * r;
+  col[idx*3] = c[0]*v; col[idx*3+1] = c[1]*v; col[idx*3+2] = c[2]*v;
+}
+function ensureColors(s) {
+  if (s < 0 || s >= S || colored[s]) return;
+  const th = themeOf(s);
+  for (let idx = 0; idx < N3; idx++) if (shellOf[idx] === s) paintVoxel(idx, th);
+  colored[s] = 1;
+}
+
+function buildCube(c) {
+  N = cubeN(c); S = N / 2; N3 = N*N*N; HALF = (N - 1) / 2;
+  alive = new Uint8Array(N3).fill(1);
+  hp = new Float32Array(N3);
+  shellOf = new Uint8Array(N3);
+  posIn = new Int32Array(N3).fill(-1);
+  col = new Float32Array(N3 * 3);
+  colored = new Uint8Array(S);
+  for (let k = 0; k < N; k++) for (let j = 0; j < N; j++) for (let i = 0; i < N; i++)
+    shellOf[i + N*(j + N*k)] = Math.min(i, j, k, N-1-i, N-1-j, N-1-k);
+  const maxShell = shellCount(0);
+  act = new Int32Array(maxShell);
+  instA = new Float32Array(maxShell * 8);
+  instN = new Float32Array(maxShell * 8);
+  finished = false; golden = -1; cubeRemoved = 0;
+}
+
+// Schicht s aktivieren; restore = Map(idx -> hp) beim Laden
+function activateShell(s, restore) {
+  actLen = 0; posIn.fill(-1);
+  const max = hpOf(s);
+  for (let idx = 0; idx < N3; idx++) {
+    const sh = shellOf[idx];
+    if (sh < s) { alive[idx] = 0; continue; }
+    if (sh !== s) continue;
+    if (restore) {
+      if (restore.has(idx)) { alive[idx] = 1; hp[idx] = Math.min(max, restore.get(idx)); }
+      else { alive[idx] = 0; continue; }
+    } else { alive[idx] = 1; hp[idx] = max; }
+    posIn[idx] = actLen; act[actLen++] = idx;
+  }
+  shellTotal = shellCount(s);
+  ensureColors(s); ensureColors(s + 1);
+  buildNext(s + 1);
+  highlightWarned = actLen <= highlightThreshold();
+  dirty = true;
+  setLayerAccent();
+}
+function buildNext(s) {
+  nCount = 0;
+  if (s >= S) { uploadNext(); return; }
+  for (let idx = 0; idx < N3; idx++) {
+    if (shellOf[idx] !== s) continue;
+    const o = nCount++ * 8;
+    instN[o] = ix(idx) - HALF; instN[o+1] = jy(idx) - HALF; instN[o+2] = kz(idx) - HALF; instN[o+3] = 1.0;
+    instN[o+4] = col[idx*3]*0.93; instN[o+5] = col[idx*3+1]*0.93; instN[o+6] = col[idx*3+2]*0.93; instN[o+7] = 0;
+  }
+  uploadNext();
+}
+const highlightThreshold = () => Math.max(8, Math.ceil(shellTotal * 0.03));
+
+function removeAct(idx) {
+  const p = posIn[idx]; if (p < 0) return;
+  const last = act[actLen - 1]; act[p] = last; posIn[last] = p; actLen--; posIn[idx] = -1;
+}
+let frameGain = 0;
+// Schaden auf ein Würfelchen; gibt Münzen zurück, falls es fällt. vis: 0 nichts, 1 wenig, 2 voll
+function hitVoxel(idx, d, mult, vis) {
+  if (!alive[idx] || shellOf[idx] !== G.layer) return 0;
+  hp[idx] -= d; dirty = true;
+  if (hp[idx] > 0) { if (vis === 2) chip(idx); return 0; }
+  alive[idx] = 0; removeAct(idx); cubeRemoved++; G.stats.removed++;
+  if (idx === golden) golden = -1;
+  const g = valOf(G.layer) * coinMult() * mult * frenzyMul();
+  G.coins += g; G.total += g; frameGain += g;
+  if (vis) debris(idx, vis === 2 ? 3 : 1);
+  if (actLen === 0) pendingDone = true;
+  return g;
+}
+
+function layerComplete(quiet) {
+  pendingDone = false;
+  G.layer++;
+  if (G.layer >= S) { reachFinale(quiet); return; }
+  activateShell(G.layer);
+  fitTarget = fitFor(N - 2*G.layer);
+  if (!quiet) {
+    const th = themeOf(G.layer);
+    toast(G.layer === S - 1 ? `Der <b>Kern</b> liegt frei. Fast geschafft.` : `Schicht ${G.layer + 1} freigelegt: <b>${th.n}</b>`);
+    sfx.chime();
+  }
+  save();
+}
+
+/* =========================================================
+   WebGL2-Renderer (instanzierte Würfel)
+   ========================================================= */
+const cv = $('stage');
+const gl = cv.getContext('webgl2', { antialias: true, alpha: true, premultipliedAlpha: true, powerPreference: 'high-performance' });
+if (!gl) {
+  document.body.insertAdjacentHTML('beforeend', '<div class="nogl"><p>Dieser Browser kann WebGL2 nicht darstellen. Bitte öffne das Spiel in einem aktuellen Safari, Chrome oder Firefox.</p></div>');
+  return;
+}
+const VS = `#version 300 es
+layout(location=0) in vec3 aP; layout(location=1) in vec3 aN;
+layout(location=2) in vec4 iP; layout(location=3) in vec4 iC;
+uniform mat4 uVP;
+out vec3 vN; out vec3 vL; out vec4 vC; out vec3 vW;
+void main(){ vec3 w = iP.xyz + aP * iP.w; vN = aN; vL = aP; vC = iC; vW = w; gl_Position = uVP * vec4(w, 1.0); }`;
+const FS = `#version 300 es
+precision highp float;
+in vec3 vN; in vec3 vL; in vec4 vC; in vec3 vW;
+uniform vec3 uCam; uniform float uT;
+out vec4 o;
+void main(){
+  vec3 n = normalize(vN); vec3 a = abs(vL); vec3 an = abs(n);
+  float e = an.x > 0.5 ? max(a.y, a.z) : (an.y > 0.5 ? max(a.x, a.z) : max(a.x, a.y));
+  float bev = smoothstep(0.36, 0.5, e);
+  vec3 key = normalize(vec3(0.35, 0.9, 0.25));
+  vec3 v = normalize(uCam - vW);
+  float lit = 0.30 + 0.42 * max(dot(n, key), 0.0) + 0.38 * max(dot(n, v), 0.0);
+  float g = vC.a; vec3 c;
+  if (g > 2.0) { c = vC.rgb * (g - 2.0) * (1.0 - bev * 0.25); }
+  else {
+    c = vC.rgb * lit * (1.0 - bev * 0.30);
+    if (g > 1.0) { float p = 0.5 + 0.5 * sin(uT * 5.5); c = mix(c, vec3(1.0), (g - 1.0) * 0.6 * p); }
+    else if (g > 0.0) { float p = 0.5 + 0.5 * sin(uT * 6.0); vec3 gd = vec3(1.0, 0.80, 0.32); c = mix(c, gd * (0.75 + 0.45 * p) * (0.6 + lit * 0.6), 0.85 * g); c += gd * 0.22 * p * g; }
+  }
+  o = vec4(c, 1.0);
+}`;
+function shader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+const uVP = gl.getUniformLocation(prog, 'uVP'), uCam = gl.getUniformLocation(prog, 'uCam'), uT = gl.getUniformLocation(prog, 'uT');
+
+// Würfel-Geometrie: 6 Seiten × 4 Ecken
+const geo = [], ind = [];
+[[[1,0,0],[0,1,0],[0,0,1]], [[-1,0,0],[0,0,1],[0,1,0]], [[0,1,0],[0,0,1],[1,0,0]], [[0,-1,0],[1,0,0],[0,0,1]], [[0,0,1],[1,0,0],[0,1,0]], [[0,0,-1],[0,1,0],[1,0,0]]]
+  .forEach(([n, u, v], f) => {
+    [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([su, sv]) => {
+      geo.push(n[0]*.5 + u[0]*su*.5 + v[0]*sv*.5, n[1]*.5 + u[1]*su*.5 + v[1]*sv*.5, n[2]*.5 + u[2]*su*.5 + v[2]*sv*.5, n[0], n[1], n[2]);
+    });
+    const b = f * 4; ind.push(b, b+1, b+2, b, b+2, b+3);
+  });
+const geoBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, geoBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geo), gl.STATIC_DRAW);
+const idxBuf = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ind), gl.STATIC_DRAW);
+function makeVAO() {
+  const buf = gl.createBuffer(), vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, geoBuf);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 0); gl.vertexAttribDivisor(2, 1);
+  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 32, 16); gl.vertexAttribDivisor(3, 1);
+  gl.bindVertexArray(null);
+  return { vao, buf };
+}
+const VA = makeVAO(), VN = makeVAO(), VF = makeVAO();
+const FXMAX = 1600; const instF = new Float32Array(FXMAX * 8); let fCount = 0;
+function uploadNext() { gl.bindBuffer(gl.ARRAY_BUFFER, VN.buf); gl.bufferData(gl.ARRAY_BUFFER, instN.subarray(0, Math.max(1, nCount) * 8), gl.STATIC_DRAW); }
+
+function rebuildActive() {
+  const max = hpOf(G.layer), hl = actLen <= highlightThreshold();
+  for (let p = 0; p < actLen; p++) {
+    const idx = act[p], o = p * 8, f = clamp(hp[idx] / max, 0, 1);
+    instA[o] = ix(idx) - HALF; instA[o+1] = jy(idx) - HALF; instA[o+2] = kz(idx) - HALF;
+    instA[o+3] = idx === golden ? 1.02 : 0.92 - 0.2 * (1 - f);
+    const sh = 0.68 + 0.32 * f;
+    instA[o+4] = col[idx*3]*sh; instA[o+5] = col[idx*3+1]*sh; instA[o+6] = col[idx*3+2]*sh;
+    instA[o+7] = idx === golden ? 1.0 : hl ? 1.7 : 0;
+  }
+  aCount = actLen;
+  gl.bindBuffer(gl.ARRAY_BUFFER, VA.buf); gl.bufferData(gl.ARRAY_BUFFER, instA.subarray(0, Math.max(1, aCount) * 8), gl.DYNAMIC_DRAW);
+  dirty = false;
+}
+
+/* Kamera */
+const cam = { yaw: 0.72, pitch: 0.5, zoom: 1, fit: 40, yv: 0, pv: 0, idle: 0, shake: 0 };
+let fitTarget = 40;
+const fitFor = a => a * 2.0 + 4;
+let eye = [0, 0, 1], fwd = [0, 0, -1], rgt = [1, 0, 0], upv = [0, 1, 0], SX = 1, SY = 1, OFF = 0, VPm = new Float32Array(16);
+function computeCamera() {
+  const w = cv.width, h = cv.height, asp = w / h, th = Math.tan(25 * Math.PI / 180);
+  if (asp < 1) { SX = 1 / th; SY = SX * asp; OFF = 0.05; } else { SY = 1 / (th * 1.15); SX = SY / asp; OFF = 0.02; }
+  const outer = finished ? 4 : N - 2 * G.layer;
+  const d = Math.max(cam.fit * cam.zoom, outer * 0.87 + 1.6), cp = Math.cos(cam.pitch);
+  eye = [d * cp * Math.sin(cam.yaw), d * Math.sin(cam.pitch), d * cp * Math.cos(cam.yaw)];
+  if (cam.shake > 0) { const s = cam.shake * 0.6; eye[0] += (Math.random() - .5) * s; eye[1] += (Math.random() - .5) * s; eye[2] += (Math.random() - .5) * s; }
+  const len = Math.hypot(eye[0], eye[1], eye[2]);
+  fwd = [-eye[0]/len, -eye[1]/len, -eye[2]/len];
+  let r = [fwd[1]*0 - fwd[2]*1, fwd[2]*0 - fwd[0]*0, fwd[0]*1 - fwd[1]*0]; // fwd × (0,1,0)
+  const rl = Math.hypot(r[0], r[1], r[2]) || 1; rgt = [r[0]/rl, r[1]/rl, r[2]/rl];
+  upv = [rgt[1]*fwd[2] - rgt[2]*fwd[1], rgt[2]*fwd[0] - rgt[0]*fwd[2], rgt[0]*fwd[1] - rgt[1]*fwd[0]];
+  const V = new Float32Array(16);
+  V[0] = rgt[0]; V[4] = rgt[1]; V[8] = rgt[2]; V[12] = -(rgt[0]*eye[0] + rgt[1]*eye[1] + rgt[2]*eye[2]);
+  V[1] = upv[0]; V[5] = upv[1]; V[9] = upv[2]; V[13] = -(upv[0]*eye[0] + upv[1]*eye[1] + upv[2]*eye[2]);
+  V[2] = -fwd[0]; V[6] = -fwd[1]; V[10] = -fwd[2]; V[14] = (fwd[0]*eye[0] + fwd[1]*eye[1] + fwd[2]*eye[2]);
+  V[15] = 1;
+  const near = 0.1, far = d + N * 3 + 20, P = new Float32Array(16);
+  P[0] = SX; P[5] = SY; P[9] = OFF; P[10] = (far + near) / (near - far); P[11] = -1; P[14] = 2 * far * near / (near - far);
+  for (let c = 0; c < 4; c++) for (let rr = 0; rr < 4; rr++) { let s = 0; for (let k = 0; k < 4; k++) s += P[k*4 + rr] * V[c*4 + k]; VPm[c*4 + rr] = s; }
+}
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+}
+addEventListener('resize', resize);
+
+// Bildschirmpunkt -> erstes vorhandenes Würfelchen (Voxel-DDA)
+function pick(px, py) {
+  const rect = cv.getBoundingClientRect();
+  const nx = (px - rect.left) / rect.width * 2 - 1, ny = 1 - (py - rect.top) / rect.height * 2;
+  const a = nx / SX, b = (ny + OFF) / SY;
+  let d = [fwd[0] + rgt[0]*a + upv[0]*b, fwd[1] + rgt[1]*a + upv[1]*b, fwd[2] + rgt[2]*a + upv[2]*b];
+  const dl = Math.hypot(d[0], d[1], d[2]); d = [d[0]/dl, d[1]/dl, d[2]/dl];
+  const o = [eye[0] + N/2, eye[1] + N/2, eye[2] + N/2];
+  let tmin = -Infinity, tmax = Infinity;
+  for (let ax = 0; ax < 3; ax++) {
+    if (Math.abs(d[ax]) < 1e-9) { if (o[ax] < 0 || o[ax] > N) return null; continue; }
+    let t1 = (0 - o[ax]) / d[ax], t2 = (N - o[ax]) / d[ax]; if (t1 > t2) [t1, t2] = [t2, t1];
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2;
+  }
+  if (tmax < Math.max(tmin, 0)) return null;
+  let t = Math.max(tmin, 0) + 1e-5;
+  const p = [o[0] + d[0]*t, o[1] + d[1]*t, o[2] + d[2]*t];
+  const c = p.map(v => clamp(Math.floor(v), 0, N - 1));
+  const step = d.map(v => v > 0 ? 1 : -1), tD = d.map(v => Math.abs(1 / (v || 1e-9)));
+  const tM = [0, 1, 2].map(ax => d[ax] === 0 ? Infinity : t + ((step[ax] > 0 ? c[ax] + 1 : c[ax]) - p[ax]) / d[ax]);
+  for (let n = 0; n < N * 3 + 3; n++) {
+    const idx = c[0] + N * (c[1] + N * c[2]);
+    if (alive[idx]) return { i: c[0], j: c[1], k: c[2], idx };
+    const ax = tM[0] < tM[1] ? (tM[0] < tM[2] ? 0 : 2) : (tM[1] < tM[2] ? 1 : 2);
+    c[ax] += step[ax]; if (c[ax] < 0 || c[ax] >= N) return null;
+    tM[ax] += tD[ax];
+  }
+  return null;
+}
+function gather(ci, cj, ck, R) {
+  const out = [], r = Math.ceil(R), R2 = R*R + 0.01;
+  for (let dk = -r; dk <= r; dk++) { const k = ck + dk; if (k < 0 || k >= N) continue;
+    for (let dj = -r; dj <= r; dj++) { const j = cj + dj; if (j < 0 || j >= N) continue;
+      for (let di = -r; di <= r; di++) { const i = ci + di; if (i < 0 || i >= N) continue;
+        if (di*di + dj*dj + dk*dk > R2) continue;
+        const idx = i + N * (j + N * k);
+        if (alive[idx] && shellOf[idx] === G.layer) out.push(idx);
+  } } }
+  return out;
+}
+function worldOf(idx) { return [ix(idx) - HALF, jy(idx) - HALF, kz(idx) - HALF]; }
+function screenOf(w) {
+  const x = VPm[0]*w[0] + VPm[4]*w[1] + VPm[8]*w[2] + VPm[12], y = VPm[1]*w[0] + VPm[5]*w[1] + VPm[9]*w[2] + VPm[13], ww = VPm[3]*w[0] + VPm[7]*w[1] + VPm[11]*w[2] + VPm[15];
+  return [(x / ww * 0.5 + 0.5) * cv.clientWidth, (0.5 - y / ww * 0.5) * cv.clientHeight];
+}
+function normalOf(idx) {
+  const p = worldOf(idx), a = p.map(Math.abs);
+  const ax = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2;
+  const n = [0, 0, 0]; n[ax] = Math.sign(p[ax]) || 1; return n;
+}
+
+/* =========================================================
+   Partikel, Drohnen, Kristall
+   ========================================================= */
+const PM = 1200;
+const P = { x:new Float32Array(PM), y:new Float32Array(PM), z:new Float32Array(PM), vx:new Float32Array(PM), vy:new Float32Array(PM), vz:new Float32Array(PM),
+  life:new Float32Array(PM), max:new Float32Array(PM), size:new Float32Array(PM), r:new Float32Array(PM), g:new Float32Array(PM), b:new Float32Array(PM), glow:new Float32Array(PM), grav:new Float32Array(PM) };
+let pN = 0;
+function addP(x, y, z, vx, vy, vz, life, size, r, g, b, glow, grav) {
+  if (pN >= PM) return; const i = pN++;
+  P.x[i] = x; P.y[i] = y; P.z[i] = z; P.vx[i] = vx; P.vy[i] = vy; P.vz[i] = vz; P.life[i] = life; P.max[i] = life; P.size[i] = size;
+  P.r[i] = r; P.g[i] = g; P.b[i] = b; P.glow[i] = glow; P.grav[i] = grav;
+}
+const rnd = (a, b) => a + Math.random() * (b - a);
+function debris(idx, n) {
+  if (pN > 900) n = 1;
+  const p = worldOf(idx), nn = normalOf(idx), c = [col[idx*3], col[idx*3+1], col[idx*3+2]];
+  for (let q = 0; q < n; q++) {
+    const sp = rnd(3, 8);
+    addP(p[0] + rnd(-.3,.3), p[1] + rnd(-.3,.3), p[2] + rnd(-.3,.3), nn[0]*sp + rnd(-2.5,2.5), nn[1]*sp + rnd(-2.5,2.5) + 3, nn[2]*sp + rnd(-2.5,2.5), rnd(.5,.9), rnd(.26,.42), c[0], c[1], c[2], 0, 24);
+  }
+}
+function chip(idx) {
+  if (pN > 1000) return;
+  const p = worldOf(idx), nn = normalOf(idx);
+  addP(p[0] + nn[0]*.5, p[1] + nn[1]*.5, p[2] + nn[2]*.5, nn[0]*3 + rnd(-2,2), nn[1]*3 + rnd(-2,2) + 2, nn[2]*3 + rnd(-2,2), .22, .14, 1, .93, .78, 2.9, 12);
+}
+function dronePos(i, tt) {
+  const a = N - 2 * Math.min(G.layer, S - 1);
+  const R = a * 0.5 + 2.4 + (i % 4) * 0.9, w = (0.35 + (i % 5) * 0.07) * (i % 2 ? 1 : -1);
+  const inc = ((i * 1.37) % 2.4) - 1.2, ph = i * 2.399 + tt * w;
+  const x = Math.cos(ph) * R, z = Math.sin(ph) * R;
+  return [x, z * Math.sin(inc) + Math.sin(tt * .7 + i) * .6, z * Math.cos(inc)];
+}
+let beamCursor = 0;
+function beam(idx) {
+  const n = Math.min(G.L.drone, 24); if (!n) return;
+  const d = dronePos(beamCursor++ % n, T), p = worldOf(idx);
+  for (let q = 1; q <= 5; q++) { const f = q / 6; addP(d[0] + (p[0]-d[0])*f, d[1] + (p[1]-d[1])*f, d[2] + (p[2]-d[2])*f, 0, 0, 0, .12, .13, .62, .92, 1, 3, 0); }
+}
+function updP(dt) {
+  for (let i = 0; i < pN;) {
+    P.life[i] -= dt;
+    if (P.life[i] <= 0) { const l = --pN; for (const k in P) P[k][i] = P[k][l]; continue; }
+    P.vy[i] -= P.grav[i] * dt; P.x[i] += P.vx[i] * dt; P.y[i] += P.vy[i] * dt; P.z[i] += P.vz[i] * dt;
+    i++;
+  }
+}
+const CRYSTAL = []; for (let x = -4; x <= 4; x++) for (let y = -5; y <= 5; y++) for (let z = -4; z <= 4; z++) if (Math.abs(x) + Math.abs(y) * 0.8 + Math.abs(z) <= 4) CRYSTAL.push([x, y, z]);
+function buildFX() {
+  let n = 0; const F = instF;
+  const put = (x, y, z, s, r, g, b, gl_) => { if (n >= FXMAX) return; const o = n++ * 8; F[o] = x; F[o+1] = y; F[o+2] = z; F[o+3] = s; F[o+4] = r; F[o+5] = g; F[o+6] = b; F[o+7] = gl_; };
+  const nd = finished ? 0 : Math.min(G.L.drone, 24);
+  for (let i = 0; i < nd; i++) { const p = dronePos(i, T); put(p[0], p[1], p[2], 0.55, .55, .88, 1, 3.0); }
+  if (finished) {
+    const ang = T * 0.5, ca = Math.cos(ang), sa = Math.sin(ang), lift = 1.6 + Math.sin(T * 1.3) * 0.25, pulse = 0.88 + 0.12 * Math.sin(T * 2.6);
+    for (const [x, y, z] of CRYSTAL) {
+      const d = (Math.abs(x) + Math.abs(y) * 0.8 + Math.abs(z)) / 4, sx = x * 0.42, sz = z * 0.42;
+      const k = (1 - d) * pulse;
+      put(sx * ca - sz * sa, y * 0.42 + lift, sx * sa + sz * ca, 0.36 + 0.05 * k, 1.0, 0.70 + 0.27 * k, 0.24 + 0.6 * k, 2.85 + 0.55 * k);
+    }
+    if (Math.random() < 0.25 && pN < PM - 2) { const a = Math.random() * 6.283, r = rnd(2.2, 3.4); addP(Math.cos(a) * r, lift + rnd(-2, 2), Math.sin(a) * r, 0, rnd(.3, 1), 0, rnd(.6, 1.2), .1, 1, .9, .55, 3.2, -0.4); }
+  }
+  for (let i = 0; i < pN; i++) {
+    const f = P.life[i] / P.max[i], s = P.size[i] * (P.glow[i] > 2 ? f : Math.pow(f, 0.5));
+    put(P.x[i], P.y[i], P.z[i], s, P.r[i], P.g[i], P.b[i], P.glow[i]);
+  }
+  fCount = n;
+  gl.bindBuffer(gl.ARRAY_BUFFER, VF.buf); gl.bufferData(gl.ARRAY_BUFFER, instF.subarray(0, Math.max(1, n) * 8), gl.DYNAMIC_DRAW);
+}
+
+function render() {
+  resize(); computeCamera();
+  if (dirty) rebuildActive();
+  buildFX();
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
+  gl.useProgram(prog);
+  gl.uniformMatrix4fv(uVP, false, VPm); gl.uniform3f(uCam, eye[0], eye[1], eye[2]); gl.uniform1f(uT, T);
+  if (nCount) { gl.bindVertexArray(VN.vao); gl.drawElementsInstanced(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0, nCount); }
+  if (aCount) { gl.bindVertexArray(VA.vao); gl.drawElementsInstanced(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0, aCount); }
+  if (fCount) { gl.bindVertexArray(VF.vao); gl.drawElementsInstanced(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0, fCount); }
+  gl.bindVertexArray(null);
+}
+
+/* =========================================================
+   Klang (WebAudio, synthetisch)
+   ========================================================= */
+let AC = null, master = null, noise = null, lastTok = 0, lastPlink = 0;
+function unlockAudio() {
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value = G.sound ? 0.55 : 0; master.connect(AC.destination);
+    noise = AC.createBuffer(1, AC.sampleRate * 0.5, AC.sampleRate);
+    const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  } catch (e) { AC = null; }
+}
+function env(g, t0, peak, dur) { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); }
+function tone(freq, dur, type, vol, t0, slideTo) {
+  const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  env(g, t0, vol, dur); o.connect(g).connect(master); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function burst(freq, q, dur, vol, t0, type = 'bandpass') {
+  const s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  s.buffer = noise; f.type = type; f.frequency.value = freq; f.Q.value = q; env(g, t0, vol, dur);
+  s.connect(f).connect(g).connect(master); s.start(t0, Math.random() * 0.3); s.stop(t0 + dur + 0.02);
+}
+const sfx = {
+  tok(pitch, removed) { if (!AC || !G.sound) return; const t = AC.currentTime; if (t - lastTok < 0.025) return; lastTok = t;
+    burst(2100 * pitch, 2.5, 0.05, 0.5, t); if (removed) tone(520 * pitch, 0.09, 'triangle', 0.14, t + 0.005); },
+  plink() { if (!AC || !G.sound) return; const t = AC.currentTime; if (t - lastPlink < 0.12) return; lastPlink = t; tone(rnd(1200, 1700), 0.05, 'sine', 0.025, t); },
+  miss() { if (!AC || !G.sound) return; burst(900, 4, 0.03, 0.15, AC.currentTime); },
+  buy() { if (!AC || !G.sound) return; const t = AC.currentTime; tone(880, .08, 'triangle', .14, t); tone(1320, .12, 'triangle', .12, t + .06); },
+  chime() { if (!AC || !G.sound) return; const t = AC.currentTime; [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.55, 'sine', 0.16, t + i * 0.09)); },
+  sparkle() { if (!AC || !G.sound) return; const t = AC.currentTime; [1568, 1760, 2093, 2349, 2637, 3136].forEach((f, i) => tone(f, 0.3, 'sine', 0.07, t + i * 0.05)); },
+  boom() { if (!AC || !G.sound) return; const t = AC.currentTime; burst(260, 0.7, 0.55, 0.9, t, 'lowpass'); tone(120, 0.4, 'sine', 0.5, t, 38); },
+  finale() { if (!AC || !G.sound) return; const t = AC.currentTime; [392, 523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, 1.4, 'sine', 0.12, t + i * 0.16)); }
+};
+function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+/* =========================================================
+   Eingabe: Drehen, Zoomen, Tippen
+   ========================================================= */
+const ptrs = new Map(); let pinch = null, lastMoveT = 0;
+cv.addEventListener('pointerdown', e => {
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 });
+  unlockAudio(); cam.idle = 0; cam.yv = cam.pv = 0;
+  if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: cam.zoom };
+    for (const p of ptrs.values()) p.moved = 999;
+  }
+});
+cv.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; p.moved += Math.abs(dx) + Math.abs(dy);
+  cam.idle = 0;
+  if (ptrs.size === 1 && p.moved > 8) {
+    const now = performance.now(), dts = Math.max(0.008, (now - lastMoveT) / 1000); lastMoveT = now;
+    cam.yaw -= dx * 0.0068; cam.pitch = clamp(cam.pitch + dy * 0.0068, -1.4, 1.4);
+    cam.yv = clamp(-dx * 0.0068 / dts, -6, 6); cam.pv = clamp(dy * 0.0068 / dts, -6, 6);
+  } else if (ptrs.size === 2 && pinch) {
+    const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+    cam.zoom = clamp(pinch.z * pinch.d / Math.max(20, d), 0.38, 1.8);
+  }
+});
+function endPtr(e, cancel) {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  ptrs.delete(e.pointerId);
+  if (ptrs.size < 2) pinch = null;
+  if (performance.now() - lastMoveT > 80) { cam.yv = 0; cam.pv = 0; }
+  if (!cancel && p.moved < 10 && performance.now() - p.t < 550 && ptrs.size === 0) doTap(e.clientX, e.clientY);
+}
+cv.addEventListener('pointerup', e => endPtr(e, false));
+cv.addEventListener('pointercancel', e => endPtr(e, true));
+cv.addEventListener('wheel', e => { e.preventDefault(); cam.zoom = clamp(cam.zoom * Math.exp(e.deltaY * 0.0012), 0.38, 1.8); cam.idle = 0; }, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+let combo = 0, lastTapT = -10, blastArmed = false, blastLeft = 0;
+function doTap(px, py) {
+  if (finished) return;
+  if (!G.intro) { G.intro = true; hideHint(); }
+  const hit = pick(px, py);
+  if (!hit) { if (blastArmed) toast('Tippe direkt auf den Würfel, um zu sprengen.'); return; }
+  if (blastArmed) { detonate(hit, px, py); return; }
+  const list = gather(hit.i, hit.j, hit.k, RADII[G.L.rad]);
+  if (!list.length) { sfx.miss(); return; }
+  combo = (T - lastTapT < 0.85) ? Math.min(comboCap(), combo + 1) : 1; lastTapT = T;
+  G.stats.bestCombo = Math.max(G.stats.bestCombo, combo);
+  const cm = 1 + 0.02 * combo, d = tapDmg() * frenzyMul();
+  if (golden >= 0 && list.includes(golden)) collectGolden(px, py);
+  let gain = 0, removed = 0;
+  for (const idx of list) { const g = hitVoxel(idx, d, cm, 2); if (g) { gain += g; removed++; } }
+  G.stats.taps++;
+  sfx.tok(1 + Math.min(combo, 30) * 0.025, removed > 0);
+  if (removed) vibrate(6);
+  if (gain > 0) popup(px, py, '+' + fmt(gain));
+  if (pendingDone) layerComplete(false);
+}
+function detonate(hit, px, py) {
+  blastArmed = false; blastLeft = blastCdAt(G.L.blast);
+  const list = gather(hit.i, hit.j, hit.k, blastRAt(G.L.blast));
+  const d = tapDmg() * blastMulAt(G.L.blast) * frenzyMul();
+  if (golden >= 0 && list.includes(golden)) collectGolden(px, py);
+  let gain = 0;
+  for (const idx of list) gain += hitVoxel(idx, d, 1 + 0.02 * combo, 2);
+  const c = worldOf(hit.idx);
+  for (let q = 0; q < 40; q++) addP(c[0], c[1], c[2], rnd(-9, 9), rnd(-4, 12), rnd(-9, 9), rnd(.25, .5), rnd(.15, .3), 1, rnd(.6, .9), .35, 3, 10);
+  cam.shake = reduceMotion ? 0 : 0.35; sfx.boom(); vibrate(30);
+  if (gain > 0) popup(px, py, '+' + fmt(gain), true);
+  if (pendingDone) layerComplete(false);
+  updBlast();
+}
+function collectGolden(px, py) {
+  const idx = golden; golden = -1; dirty = true;
+  sfx.sparkle(); vibrate(20);
+  const p = worldOf(idx);
+  for (let q = 0; q < 26; q++) addP(p[0], p[1], p[2], rnd(-6, 6), rnd(-2, 9), rnd(-6, 6), rnd(.4, .8), rnd(.12, .22), 1, .85, .35, 3, 8);
+  if (Math.random() < 0.5) {
+    const g = Math.max(30 * valOf(G.layer) * coinMult(), droneIncome() * 90, 25);
+    G.coins += g; G.total += g;
+    popup(px, py - 30, '+' + fmt(g), true);
+    toast(`Goldfund! <b>+${fmt(g)}</b> Münzen`, 'gold');
+  } else {
+    G.frenzy = 15;
+    toast('<b>Goldrausch!</b> 15 Sekunden lang ×4 Schaden und Münzen', 'gold');
+  }
+}
+function spawnGolden() {
+  if (actLen < 20 || finished) return;
+  let best = -1, bestDot = -2;
+  for (let tries = 0; tries < 40; tries++) {
+    const idx = act[(Math.random() * actLen) | 0], n = normalOf(idx);
+    const dot = -(n[0]*fwd[0] + n[1]*fwd[1] + n[2]*fwd[2]);
+    if (dot > bestDot) { bestDot = dot; best = idx; }
+    if (dot > 0.6) break;
+  }
+  golden = best; goldenLife = 14; dirty = true;
+  toast('Ein <b>goldenes Würfelchen</b> glänzt. Schnell antippen!', 'gold');
+}
+
+/* =========================================================
+   UI
+   ========================================================= */
+const toastsEl = $('toasts');
+function toast(html, kind, hold = 2.6) {
+  const el = document.createElement('div'); el.className = 'toast' + (kind ? ' ' + kind : ''); el.innerHTML = html;
+  el.style.setProperty('--hold', hold + 's');
+  toastsEl.appendChild(el); while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
+  setTimeout(() => el.remove(), (hold + 0.5) * 1000);
+}
+let popCount = 0;
+function popup(x, y, text, big) {
+  if (popCount > 14) return; popCount++;
+  const el = document.createElement('div'); el.className = 'pop' + (big ? ' big' : ''); el.textContent = text;
+  el.style.left = (x + rnd(-10, 10)) + 'px'; el.style.top = (y - 10) + 'px';
+  document.body.appendChild(el); setTimeout(() => { el.remove(); popCount--; }, 900);
+}
+function setLayerAccent() {
+  const s = Math.min(G.layer, S - 1), c = themeOf(s).a.map(v => Math.round(Math.min(1, v * 1.08) * 255));
+  document.documentElement.style.setProperty('--layer', `rgb(${c[0]},${c[1]},${c[2]})`);
+}
+const els = { coins: $('coins'), rate: $('rate'), layerName: $('layerName'), layerStats: $('layerStats'), layerBar: $('layerBar'), leftCount: $('leftCount'), cubePct: $('cubePct'), cubeBadge: $('cubeBadge'), frenzy: $('frenzy'), combo: $('combo'), shopDot: $('shopDot') };
+function updHUD() {
+  els.coins.textContent = fmt(G.coins);
+  const di = droneIncome();
+  els.rate.innerHTML = di > 0 ? `<b>+${fmt(di)}/s</b> durch ${G.L.drone} ${G.L.drone === 1 ? 'Drohne' : 'Drohnen'}` : finished ? 'Der Würfel ist offen' : `+${fmt(valOf(G.layer) * coinMult())} pro Würfelchen`;
+  els.cubeBadge.textContent = `Würfel ${G.c + 1}`;
+  if (finished) {
+    els.layerName.innerHTML = '<b>Alle Schichten abgetragen</b>';
+    els.layerStats.textContent = `${N}×${N}×${N}`;
+    els.layerBar.style.width = '100%';
+    els.leftCount.textContent = 'Der Kern ist offen';
+  } else {
+    const th = themeOf(G.layer);
+    els.layerName.innerHTML = `Schicht <b>${G.layer + 1}</b> von ${S} · <b>${th.n}</b>`;
+    els.layerStats.textContent = `Härte ${fmt(hpOf(G.layer))}`;
+    els.layerBar.style.width = (100 * (1 - actLen / shellTotal)).toFixed(1) + '%';
+    els.leftCount.textContent = `${actLen.toLocaleString('de-DE')} Würfelchen übrig`;
+  }
+  const pct = 100 * cubeRemoved / N3;
+  els.cubePct.textContent = (pct < 10 ? pct.toLocaleString('de-DE', { maximumFractionDigits: 1 }) : Math.floor(pct)) + ' % freigelegt';
+  els.frenzy.hidden = !(G.frenzy > 0); if (G.frenzy > 0) els.frenzy.textContent = `Goldrausch ${Math.ceil(G.frenzy)} s`;
+  const showCombo = combo >= 3 && T - lastTapT < 0.9;
+  els.combo.hidden = !showCombo; if (showCombo) els.combo.innerHTML = `Combo ${combo} <b>×${fmtX(1 + 0.02 * combo)}</b>`;
+  els.shopDot.hidden = !UPS.some(u => unlocked(u) && costOf(u, G.L[u.id]) <= G.coins);
+}
+
+/* Werkstatt */
+let buyAmt = 1;
+function costOf(u, l) { if (u.costs) return l < u.costs.length ? u.costs[l] : Infinity; return l >= u.max ? Infinity : Math.ceil(u.base * Math.pow(u.g, l)); }
+const unlocked = u => !u.need || G.L[u.need] > 0;
+function bulk(u) {
+  let l = G.L[u.id], n = 0, cost = 0; const lim = buyAmt === 'max' ? 1000 : buyAmt;
+  while (n < lim) { const c = costOf(u, l + n); if (!isFinite(c)) break; if (buyAmt === 'max' && cost + c > G.coins && n > 0) break; if (buyAmt === 'max' && n === 0 && c > G.coins) { cost = c; n = 1; break; } cost += c; n++; }
+  return { n, cost };
+}
+function effText(u, a, b) {
+  switch (u.id) {
+    case 'dmg':   return `Schaden pro Tipp ${fmt(dmgAt(a))} → ${fmt(dmgAt(b))}`;
+    case 'rad':   return b > a ? `Trifft ${RAD_COUNT[a]} → ${RAD_COUNT[b]} Würfelchen pro Tipp` : `Trifft ${RAD_COUNT[a]} Würfelchen pro Tipp`;
+    case 'drone': return `${a} → ${b} Drohnen, sie klopfen von allein`;
+    case 'ddmg':  return `Schaden pro Drohnenschlag ${fmt(droneDmgAt(a))} → ${fmt(droneDmgAt(b))}`;
+    case 'dspd':  return `${fmtX(rateAt(a))} → ${fmtX(rateAt(b))} Schläge/s je Drohne`;
+    case 'gold':  return `Münzen ×${fmtX(goldAt(a))} → ×${fmtX(goldAt(b))}`;
+    case 'combo': return `Combo bis ${capAt(a)} → ${capAt(b)} (max ×${fmtX(1 + 0.02 * capAt(b))})`;
+    case 'blast': return a === 0 ? `Fähigkeit: sprengt einen Krater (Radius ${fmtX(blastRAt(1))})` : `Radius ${fmtX(blastRAt(a))} → ${fmtX(blastRAt(b))} · Abklingzeit ${blastCdAt(b)} s`;
+    case 'night': return `Drohnen arbeiten offline ${nightAt(a)} → ${nightAt(b)} Std`;
+  }
+}
+function maxedText(u) {
+  const l = G.L[u.id];
+  switch (u.id) {
+    case 'rad': return `Trifft ${RAD_COUNT[l]} Würfelchen pro Tipp`;
+    case 'dspd': return `${fmtX(rateAt(l))} Schläge/s je Drohne`;
+    case 'combo': return `Combo bis ${capAt(l)}`;
+    case 'blast': return `Radius ${fmtX(blastRAt(l))} · Abklingzeit ${blastCdAt(l)} s`;
+    case 'night': return `Drohnen arbeiten offline ${nightAt(l)} Std`;
+    default: return 'Höchste Stufe';
+  }
+}
+function renderShop() {
+  $('shopList').innerHTML = UPS.map(u => `
+    <div class="up" id="up-${u.id}">
+      <span class="up-ico">${svg(u.id)}</span>
+      <div style="min-width:0"><div class="up-name">${u.name} <small id="lv-${u.id}"></small></div><div class="up-eff" id="ef-${u.id}"></div></div>
+      <button class="buy" id="buy-${u.id}" data-id="${u.id}"></button>
+    </div>`).join('');
+  updShop();
+}
+function updShop() {
+  for (const u of UPS) {
+    const row = $('up-' + u.id); if (!row) continue;
+    const l = G.L[u.id], ok = unlocked(u);
+    row.classList.toggle('locked', !ok);
+    $('lv-' + u.id).textContent = l > 0 ? `Stufe ${l}` : '';
+    const btn = $('buy-' + u.id);
+    if (!ok) { $('ef-' + u.id).textContent = 'Braucht zuerst eine Bohrdrohne'; btn.disabled = true; btn.innerHTML = svg('lock'); continue; }
+    const { n, cost } = bulk(u);
+    if (n === 0) { $('ef-' + u.id).textContent = maxedText(u); btn.disabled = true; btn.textContent = 'Max'; continue; }
+    $('ef-' + u.id).textContent = effText(u, l, l + n);
+    btn.disabled = cost > G.coins;
+    btn.innerHTML = `${svg('coin')}${fmt(cost)}${n > 1 || buyAmt !== 1 ? ` <small>×${n}</small>` : ''}`;
+  }
+}
+$('shopList').addEventListener('click', e => {
+  const b = e.target.closest('.buy'); if (!b || b.disabled) return;
+  const u = UPS.find(x => x.id === b.dataset.id); const { n, cost } = bulk(u);
+  if (!n || cost > G.coins) return;
+  G.coins -= cost; G.L[u.id] += n; unlockAudio(); sfx.buy();
+  if (u.id === 'drone' && G.L.drone === n) toast('Die erste <b>Bohrdrohne</b> fliegt. Sie arbeitet auch, wenn du weg bist.');
+  if (u.id === 'blast' && G.L.blast === n) { blastLeft = 0; toast('<b>Sprengladung</b> bereit: unten rechts antippen, dann auf den Würfel.'); }
+  updShop(); updHUD(); updBlast(); save();
+});
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  buyAmt = b.dataset.amt === 'max' ? 'max' : +b.dataset.amt;
+  document.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b)); updShop();
+}));
+function openSheet(id) { closeSheets(); $(id).classList.add('open'); }
+function closeSheets() { $('shop').classList.remove('open'); $('menu').classList.remove('open'); }
+$('shopBtn').addEventListener('click', () => { unlockAudio(); if ($('shop').classList.contains('open')) closeSheets(); else { updShop(); openSheet('shop'); } });
+$('shopClose').addEventListener('click', closeSheets);
+$('menuClose').addEventListener('click', closeSheets);
+cv.addEventListener('pointerdown', () => { if ($('menu').classList.contains('open')) closeSheets(); });
+
+/* Sprengladung */
+function updBlast() {
+  const b = $('blastBtn'), ring = $('blastRing'), lock = G.L.blast === 0;
+  b.classList.toggle('locked', lock); b.classList.toggle('armed', blastArmed); b.classList.toggle('ready', !lock && blastLeft <= 0 && !blastArmed);
+  $('blastIco').innerHTML = svg(lock ? 'lock' : 'blast');
+  const f = lock ? 0 : blastLeft > 0 ? 1 - blastLeft / blastCdAt(G.L.blast) : 1;
+  ring.style.strokeDashoffset = (157.08 * (1 - f)).toFixed(1);
+  b.setAttribute('aria-label', lock ? 'Sprengladung (in der Werkstatt freischalten)' : blastLeft > 0 ? `Sprengladung lädt, noch ${Math.ceil(blastLeft)} s` : 'Sprengladung zünden');
+}
+$('blastBtn').addEventListener('click', () => {
+  unlockAudio();
+  if (G.L.blast === 0) { toast('Die <b>Sprengladung</b> gibt es in der Werkstatt.'); return; }
+  if (blastLeft > 0) { toast(`Die Sprengladung lädt noch ${Math.ceil(blastLeft)} s.`); return; }
+  blastArmed = !blastArmed; if (blastArmed) toast('Scharf! Tippe auf die Stelle, die du sprengen willst.');
+  updBlast();
+});
+
+/* Ton */
+function updSound() { $('soundBtn').innerHTML = svg(G.sound ? 'sndOn' : 'sndOff'); $('soundBtn').setAttribute('aria-label', G.sound ? 'Ton ausschalten' : 'Ton einschalten'); if (master) master.gain.value = G.sound ? 0.55 : 0; }
+$('soundBtn').addEventListener('click', () => { unlockAudio(); G.sound = !G.sound; updSound(); save(); });
+
+/* Logbuch */
+let confirmReset = false;
+function renderMenu() {
+  const st = G.stats;
+  $('menuBody').innerHTML = `
+    <dl class="stats">
+      <dt>Aktueller Würfel</dt><dd>${N}×${N}×${N}</dd>
+      <dt>Würfelchen abgetragen</dt><dd>${fmt(st.removed)}</dd>
+      <dt>Tipps</dt><dd>${fmt(st.taps)}</dd>
+      <dt>Beste Combo</dt><dd>${st.bestCombo}</dd>
+      <dt>Münzen verdient</dt><dd>${fmt(G.total)}</dd>
+      <dt>Spielzeit</dt><dd>${fmtTime(st.playSec)}</dd>
+      <dt>Geöffnete Würfel</dt><dd>${G.c}</dd>
+      <dt>Neugier-Bonus</dt><dd>Münzen ×${fmtX(permCoin())} · Schaden ×${fmtX(permDmg())}</dd>
+    </dl>
+    <div class="section-label">So läuft’s</div>
+    <p class="muted-note">Jede Schicht muss ganz weg, bevor die nächste freiliegt. Tiefere Schichten sind härter und mehr wert. Goldene Würfelchen bringen Münzen oder einen Goldrausch. Drohnen arbeiten weiter, wenn du das Spiel schließt, so lange wie deine Nachtschicht reicht. Der Spielstand wird auf diesem Gerät gespeichert.</p>
+    <div class="section-label">Spielstand</div>
+    ${confirmReset
+      ? `<div class="confirm-row"><button class="yes" id="resetYes">Ja, alles löschen</button><button class="no" id="resetNo">Abbrechen</button></div>`
+      : `<button class="danger" id="resetBtn">Spielstand löschen</button>`}`;
+  const rb = $('resetBtn'), ry = $('resetYes'), rn = $('resetNo');
+  if (rb) rb.onclick = () => { confirmReset = true; renderMenu(); };
+  if (rn) rn.onclick = () => { confirmReset = false; renderMenu(); };
+  if (ry) ry.onclick = () => { confirmReset = false; hardReset(); closeSheets(); };
+}
+$('menuBtn').addEventListener('click', () => { if ($('menu').classList.contains('open')) closeSheets(); else { confirmReset = false; renderMenu(); openSheet('menu'); } });
+
+/* Modals */
+function modal(html, btnText, onOk, low) {
+  const v = document.createElement('div'); v.className = 'veil' + (low ? ' low' : '');
+  v.innerHTML = `<div class="card" role="dialog" aria-modal="true">${html}<button class="primary" id="modalOk">${btnText}</button></div>`;
+  document.body.appendChild(v);
+  const ok = v.querySelector('#modalOk');
+  ok.addEventListener('click', () => { unlockAudio(); v.remove(); onOk && onOk(); });
+}
+function hideHint() { const h = $('hint'); h.style.opacity = 0; setTimeout(() => { h.hidden = true; }, 500); }
+
+/* Finale & neuer Würfel */
+let finaleShown = false;
+function reachFinale(quiet) {
+  finished = true; actLen = 0; aCount = 0; nCount = 0; uploadNext(); dirty = true; golden = -1; blastArmed = false;
+  fitTarget = 15;
+  setLayerAccent(); save();
+  if (!quiet) { sfx.finale(); vibrate(60); setTimeout(showFinale, 2400); }
+}
+function showFinale() {
+  if (finaleShown) return; finaleShown = true;
+  const secret = SECRETS[Math.min(G.c, SECRETS.length - 1)];
+  const nc = G.c + 1;
+  modal(`
+    <div class="eyebrow">Würfel ${G.c + 1} · ${N}×${N}×${N} · ${fmt(N3)} Würfelchen</div>
+    <h2>Im Würfel war …</h2>
+    <p>${secret}</p>
+    <p class="meta">Gebraucht: ${fmtTime(G.stats.cubeSec)}. Der nächste Würfel ist größer und härter, dafür nimmst du deine Neugier mit: Münzen ×${fmtX(Math.pow(1.5, nc))} und Schaden ×${fmtX(Math.pow(1.25, nc))}, dauerhaft. Münzen und Werkstatt starten neu.</p>`,
+    'Nächsten Würfel öffnen', () => { finaleShown = false; prestige(); }, true);
+}
+function prestige() {
+  G.c++; G.coins = 0; G.layer = 0; G.frenzy = 0; G.stats.cubeSec = 0;
+  for (const k in G.L) G.L[k] = 0;
+  blastLeft = 0; blastArmed = false; combo = 0; pN = 0;
+  buildCube(G.c); activateShell(0);
+  fitTarget = fitFor(N); cam.fit = fitTarget * 1.6;
+  renderShop(); updBlast(); updHUD(); save();
+  toast(`Würfel ${G.c + 1}: <b>${N}×${N}×${N}</b>. Viel Neugier!`, null, 3.2);
+  sfx.chime();
+}
+function newGame() {
+  G.c = 0; G.layer = 0; G.coins = 0; G.total = 0; G.frenzy = 0;
+  for (const k in G.L) G.L[k] = 0;
+  G.stats = { taps: 0, removed: 0, playSec: 0, cubeSec: 0, bestCombo: 0 };
+  buildCube(0); activateShell(0);
+  fitTarget = fitFor(N); cam.fit = fitTarget * 1.5;
+}
+function hardReset() {
+  store.del(); const keepSound = G.sound;
+  newGame(); G.sound = keepSound; G.intro = false; blastLeft = 0; blastArmed = false; pN = 0;
+  $('hint').hidden = false; $('hint').style.opacity = 1;
+  renderShop(); updBlast(); updHUD(); save();
+  toast('Neuer Würfel. Alles auf Anfang.');
+}
+
+/* =========================================================
+   Offline-Fortschritt
+   ========================================================= */
+function catchUp(sec, announce) {
+  if (finished || G.L.drone === 0 || sec < 1) return;
+  const capSec = nightAt(G.L.night) * 3600, eff = Math.min(sec, capSec);
+  let hits = G.L.drone * droneRate() * eff, d = droneDmg();
+  let n = Math.floor(hits); if (n < 1) return;
+  if (n > 150000) { d *= n / 150000; n = 150000; }
+  const c0 = G.coins, r0 = G.stats.removed, l0 = G.layer;
+  golden = -1;
+  for (let h = 0; h < n && !finished; h++) {
+    if (actLen === 0) { layerComplete(true); continue; }
+    hitVoxel(act[(Math.random() * actLen) | 0], d, 1, 0);
+    if (pendingDone) layerComplete(true);
+  }
+  fitTarget = finished ? 15 : fitFor(N - 2 * G.layer); cam.fit = fitTarget;
+  dirty = true; save();
+  const gained = G.coins - c0, removed = G.stats.removed - r0, layers = G.layer - l0;
+  if (announce && (removed > 0 || gained > 0)) {
+    modal(`
+      <div class="eyebrow">Willkommen zurück</div>
+      <h2>Deine Drohnen haben ${fmtTime(eff)} gearbeitet</h2>
+      <div class="big-num">+${fmt(gained)} Münzen</div>
+      <p class="meta">${fmt(removed)} Würfelchen abgetragen${layers > 0 ? `, ${layers} ${layers === 1 ? 'neue Schicht' : 'neue Schichten'} freigelegt` : ''}.${sec > capSec ? ` Du warst ${fmtTime(sec)} weg, die Nachtschicht reicht ${nightAt(G.L.night)} Std. In der Werkstatt kannst du sie verlängern.` : ''}</p>`,
+      'Weiter klopfen', () => { if (finished) showFinale(); });
+  } else if (removed > 0) {
+    toast(`Drohnen: ${fmt(removed)} Würfelchen, <b>+${fmt(gained)}</b>`);
+    if (finished) setTimeout(showFinale, 600);
+  }
+  updHUD(); updShop();
+}
+
+/* =========================================================
+   Speichern (IndexedDB, localStorage als Rückfall)
+   ========================================================= */
+const store = {
+  db: null,
+  open() {
+    return new Promise(res => {
+      const to = setTimeout(res, 1500);
+      try {
+        const r = indexedDB.open('neugierwuerfel', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('kv');
+        r.onsuccess = () => { store.db = r.result; clearTimeout(to); res(); };
+        r.onerror = r.onblocked = () => { clearTimeout(to); res(); };
+      } catch (e) { clearTimeout(to); res(); }
+    });
+  },
+  getIDB() {
+    return new Promise(res => {
+      if (!store.db) return res(null);
+      try { const q = store.db.transaction('kv').objectStore('kv').get('save'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (e) { res(null); }
+    });
+  },
+  getLS() { try { return JSON.parse(localStorage.getItem('neugierwuerfel_save') || 'null'); } catch (e) { return null; } },
+  set(v) {
+    try { if (store.db) store.db.transaction('kv', 'readwrite').objectStore('kv').put(v, 'save'); } catch (e) {}
+    try { localStorage.setItem('neugierwuerfel_save', JSON.stringify(v)); } catch (e) {}
+  },
+  del() {
+    try { if (store.db) store.db.transaction('kv', 'readwrite').objectStore('kv').delete('save'); } catch (e) {}
+    try { localStorage.removeItem('neugierwuerfel_save'); } catch (e) {}
+  }
+};
+function snapshot() {
+  const ids = Array.from(act.subarray(0, actLen));
+  return { v: 1, c: G.c, layer: G.layer, coins: G.coins, total: G.total, L: { ...G.L }, stats: { ...G.stats }, sound: G.sound, intro: G.intro,
+    blastLeft, fin: finished, act: ids, hp: ids.map(i => +hp[i].toPrecision(6)), last: Date.now() };
+}
+let booted = false;
+function save() { if (booted) store.set(snapshot()); }
+function restore(s) {
+  G.c = s.c | 0; G.layer = s.layer | 0; G.coins = +s.coins || 0; G.total = +s.total || 0;
+  for (const k in G.L) G.L[k] = (s.L && s.L[k]) | 0;
+  G.stats = Object.assign({ taps: 0, removed: 0, playSec: 0, cubeSec: 0, bestCombo: 0 }, s.stats || {});
+  G.sound = s.sound !== false; G.intro = !!s.intro; blastLeft = +s.blastLeft || 0;
+  buildCube(G.c);
+  if (s.fin || G.layer >= S) {
+    G.layer = S; alive.fill(0); actLen = 0; cubeRemoved = N3; finished = true; fitTarget = 15; setLayerAccent();
+  } else {
+    const m = new Map(); (s.act || []).forEach((idx, i) => m.set(idx, s.hp[i]));
+    activateShell(G.layer, m.size ? m : null);
+    let rem = 0; for (let idx = 0; idx < N3; idx++) if (!alive[idx]) rem++; cubeRemoved = rem;
+    if (actLen === 0) pendingDone = true;
+    fitTarget = fitFor(N - 2 * G.layer);
+  }
+  cam.fit = fitTarget;
+}
+
+/* =========================================================
+   Hauptschleife
+   ========================================================= */
+let T = 0, lastTs = 0, hudT = 0, shopT = 0, saveT = 0;
+function update(dt) {
+  T += dt; G.stats.playSec += dt; if (!finished) G.stats.cubeSec += dt;
+  if (G.frenzy > 0) G.frenzy = Math.max(0, G.frenzy - dt);
+  if (blastLeft > 0) { blastLeft = Math.max(0, blastLeft - dt); if (blastLeft === 0) { updBlast(); if (G.L.blast) toast('Sprengladung wieder bereit.'); } }
+  if (cam.shake > 0) cam.shake = Math.max(0, cam.shake - dt);
+  if (pendingDone && !finished) layerComplete(false);
+  // Drohnen
+  if (!finished && G.L.drone > 0 && actLen > 0) {
+    droneAcc += G.L.drone * droneRate() * dt;
+    let n = Math.floor(droneAcc); droneAcc -= n;
+    if (n > 0) {
+      let d = droneDmg() * frenzyMul(); if (n > 300) { d *= n / 300; n = 300; }
+      let beams = 0;
+      for (let h = 0; h < n && actLen > 0 && !finished; h++) {
+        let idx = act[(Math.random() * actLen) | 0];
+        if (idx === golden) { if (actLen < 2) continue; idx = act[(Math.random() * actLen) | 0]; if (idx === golden) continue; }
+        const g = hitVoxel(idx, d, 1, 1);
+        if (beams < 2) { beam(idx); beams++; }
+        if (g) sfx.plink();
+        if (pendingDone) layerComplete(false);
+      }
+    }
+  }
+  // Goldene Würfelchen
+  if (!finished) {
+    if (golden >= 0) {
+      goldenLife -= dt;
+      if (goldenLife <= 0 || !alive[golden]) { golden = -1; dirty = true; }
+      else if (Math.random() < dt * 10) { const p = worldOf(golden), n = normalOf(golden); addP(p[0] + n[0]*.6 + rnd(-.45,.45), p[1] + n[1]*.6 + rnd(-.45,.45), p[2] + n[2]*.6 + rnd(-.45,.45), n[0]*1.6, n[1]*1.6 + 1, n[2]*1.6, .55, .12, 1, .86, .4, 3.2, 0); }
+    }
+    else { goldenTimer -= dt; if (goldenTimer <= 0) { goldenTimer = rnd(45, 90); spawnGolden(); } }
+    if (!highlightWarned && actLen > 0 && actLen <= highlightThreshold()) {
+      highlightWarned = true; dirty = true;
+      toast(`Nur noch <b>${actLen}</b> Würfelchen in dieser Schicht. Sie leuchten jetzt.`);
+    }
+  }
+  updP(dt);
+  // Kamera
+  cam.fit += (fitTarget - cam.fit) * (1 - Math.exp(-dt * 2.2));
+  if (ptrs.size === 0) { cam.yaw += cam.yv * dt; cam.pitch = clamp(cam.pitch + cam.pv * dt, -1.4, 1.4); cam.yv *= Math.exp(-dt * 3.5); cam.pv *= Math.exp(-dt * 3.5); }
+  cam.idle += dt;
+  if (!reduceMotion && cam.idle > 7 && ptrs.size === 0) cam.yaw += dt * 0.07 * Math.min(1, (cam.idle - 7) / 3);
+  if (finished && !reduceMotion) cam.yaw += dt * 0.15;
+}
+let droneAcc = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  if (!lastTs) lastTs = ts;
+  let dtr = (ts - lastTs) / 1000; lastTs = ts;
+  if (!(dtr >= 0)) dtr = 0;
+  if (dtr > 3) { catchUp(dtr, dtr >= 60); dtr = 0; }
+  const dt = Math.min(dtr, 0.1);
+  frameGain = 0;
+  update(dt);
+  render();
+  hudT += dt; shopT += dt; saveT += dt;
+  if (hudT > 0.1) { hudT = 0; updHUD(); if (blastLeft > 0) updBlast(); }
+  if (shopT > 0.25) { shopT = 0; if ($('shop').classList.contains('open')) updShop(); }
+  if (saveT > 15) { saveT = 0; save(); }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+addEventListener('pagehide', save);
+cv.addEventListener('webglcontextlost', e => { e.preventDefault(); save(); });
+cv.addEventListener('webglcontextrestored', () => location.reload());
+
+/* =========================================================
+   Start
+   ========================================================= */
+async function start(hot) {
+  resize();
+  await store.open();
+  let s = hot && hot.save;
+  if (!s) { const a = await store.getIDB(), b = store.getLS(); s = a && b ? (a.last >= b.last ? a : b) : (a || b); }
+  if (s && s.v === 1) { try { restore(s); } catch (e) { console.warn('Spielstand defekt, neues Spiel', e); newGame(); s = null; } }
+  else { newGame(); s = null; }
+  booted = true;
+  renderShop(); updBlast(); updSound(); updHUD();
+  if (!G.intro) $('hint').hidden = false;
+  if (s && s.last) {
+    const away = (Date.now() - s.last) / 1000;
+    if (away > 5) catchUp(away, away >= 60);
+  }
+  if (finished && !document.querySelector('.veil')) setTimeout(showFinale, 800);
+  save();
+  requestAnimationFrame(frame);
+  if (location.hash === '#test') window.__nw = { G, doTap, spawnGolden, renderMenu, openSheet, catchUp, get N() { return N; }, get actLen() { return actLen; }, get finished() { return finished; }, layerComplete, updShop, updHUD, cam, rawPick: pick };
+}
+try { window.claude?.hot?.snapshot?.(() => ({ save: snapshot() })); } catch (e) {}
+const hotApi = window.claude?.hot;
+if (hotApi && hotApi.ready) hotApi.ready(d => start(d || {})); else start((hotApi && hotApi.data) || {});
+})();
+</script>
+</body>
+</html>

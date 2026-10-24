@@ -834,72 +834,164 @@ function randomTarget() {
   for (let k = 0; k < 8; k++) { const c = act[(Math.random() * actLen) | 0]; if (c !== golden) return c; }
   return -1;
 }
-// Laserdrohne: brennt eine ganze Reihe über eine Würfelseite
-function fireLaser() {
-  const idx = randomTarget(); if (idx < 0) return;
-  const ci = [ix(idx), jy(idx), kz(idx)], w = worldOf(idx), a = w.map(Math.abs);
-  const ax = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2;
-  const others = [0, 1, 2].filter(x => x !== ax), la = others[(Math.random() * 2) | 0];
-  const nrm = [0, 0, 0]; nrm[ax] = Math.sign(w[ax]) || 1;
-  const lo = G.layer, hi = N - 1 - G.layer;
-  const d = Math.max(tapDmg(), droneDmg()) * laserMul(G.P.laser) * frenzyMul();
-  let gain = 0, first = null;
-  for (let t = lo; t <= hi; t++) {
-    const c = ci.slice(); c[la] = t;
-    const id = c[0] + N * (c[1] + N * c[2]);
-    const p = [c[0] - HALF + nrm[0] * .56, c[1] - HALF + nrm[1] * .56, c[2] - HALF + nrm[2] * .56];
-    if (!first) first = p;
-    addP(p[0], p[1], p[2], 0, 0, 0, .42 + (t - lo) * .014, .34, 1, .32, .42, 3.2, 0);
-    if (id !== golden && alive[id] && shellOf[id] === G.layer) gain += hitVoxel(id, d, 1, 1);
-  }
-  beamLine(specialPos(specialIndex('laser'), T), first, [1, .32, .42], 8, .2);
-  sfx.laser();
-  if (gain > 0) { const sc = screenOf(w); popup(sc[0], sc[1], '+' + fmt(gain)); }
-}
-// Sprengdrohne: wirft eine Ladung mit den Werkstatt-Werten der Sprengladung
-function dropBomb() {
-  const idx = randomTarget(); if (idx < 0) return;
-  const w = worldOf(idx), list = gather(ix(idx), jy(idx), kz(idx), blastRAt(G.L.blast));
-  const d = Math.max(tapDmg(), droneDmg()) * blastMulAt(G.L.blast) * frenzyMul();
-  beamLine(specialPos(specialIndex('bomber'), T), w, [1, .6, .25], 6, .18);
-  let gain = 0;
-  for (const id of list) if (id !== golden) gain += hitVoxel(id, d, 1, 1);
-  for (let q = 0; q < 26; q++) addP(w[0], w[1], w[2], rnd(-8, 8), rnd(-3, 10), rnd(-8, 8), rnd(.25, .5), rnd(.15, .28), 1, rnd(.55, .85), .3, 3, 10);
-  sfx.boom(0.45);
-  if (gain > 0) { const sc = screenOf(w); popup(sc[0], sc[1], '+' + fmt(gain), true); }
-}
-// Goldsucher: fliegt sofort zum goldenen Würfelchen, schwebt davor
-// und holt es, wenn du es nicht selbst antippst
-let seekP = null, seekHere = false;
-function seekerGoal() {
-  if (golden < 0) return specialPos(specialIndex('seeker'), T);
-  const w = worldOf(golden), n = normalOf(golden), bob = Math.sin(T * 3) * .1;
-  return [w[0] + n[0] * 2.2, w[1] + n[1] * 2.2 + bob, w[2] + n[2] * 2.2];
-}
-function updSeeker(dt) {
-  if (!G.P.seeker || finished) { seekP = null; seekHere = false; return; }
-  if (!seekP) seekP = specialPos(specialIndex('seeker'), T);
-  const t = seekerGoal(), r0 = Math.hypot(seekP[0], seekP[1], seekP[2]) || 1, r1 = Math.hypot(t[0], t[1], t[2]) || 1;
-  const d0 = seekP.map(v => v / r0), dotOf = (a, b) => clamp(a[0]*b[0] + a[1]*b[1] + a[2]*b[2], -1, 1);
-  let d1 = t.map(v => v / r1), dot = dotOf(d0, d1);
+/* Spezialdrohnen: fliegen auf einer Bahn um den Würfel (nie hindurch) zu ihrem Einsatzort */
+const SD = { laser: { p: null, job: null, here: false }, seeker: { p: null, job: null, here: false }, bomber: { p: null, job: null, here: false, bomb: null } };
+function resetSpecials() { for (const k in SD) { SD[k].p = null; SD[k].job = null; SD[k].here = false; } SD.bomber.bomb = null; }
+const dot3 = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const lerp3 = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+// Schwebepunkt vor einem Würfelchen, entlang der Seitennormalen
+const hoverAt = (w, n, dist) => [w[0] + n[0] * dist, w[1] + n[1] * dist, w[2] + n[2] * dist];
+// ein Flugschritt Richtung Ziel; true, sobald die Drohne angekommen ist
+function flyStep(st, goal, dt) {
+  const p = st.p, r0 = Math.hypot(p[0], p[1], p[2]) || 1, r1 = Math.hypot(goal[0], goal[1], goal[2]) || 1;
+  const d0 = p.map(v => v / r0);
+  let d1 = goal.map(v => v / r1), dot = clamp(dot3(d0, d1), -1, 1);
   if (dot < -0.999) { // genau gegenüber: seitlich ausweichen
     const ax = Math.abs(d0[1]) < .9 ? [0, 1, 0] : [1, 0, 0];
     const pp = [d0[1]*ax[2] - d0[2]*ax[1], d0[2]*ax[0] - d0[0]*ax[2], d0[0]*ax[1] - d0[1]*ax[0]], pl = Math.hypot(pp[0], pp[1], pp[2]);
-    d1 = d1.map((v, k) => v + pp[k] / pl * .1); const l = Math.hypot(d1[0], d1[1], d1[2]); d1 = d1.map(v => v / l); dot = dotOf(d0, d1);
+    d1 = d1.map((v, k) => v + pp[k] / pl * .1); const l = Math.hypot(d1[0], d1[1], d1[2]); d1 = d1.map(v => v / l); dot = clamp(dot3(d0, d1), -1, 1);
   }
-  // auf einer Bahn um den Würfel herum, nicht mitten hindurch
   const ang = Math.acos(dot), step = Math.min(ang, dt * Math.min(3.2, 1.2 + 3 * ang));
   let d = d1;
   if (ang > 1e-4) { const sn = Math.sin(ang), w0 = Math.sin(ang - step) / sn, w1 = Math.sin(step) / sn; d = [d0[0]*w0 + d1[0]*w1, d0[1]*w0 + d1[1]*w1, d0[2]*w0 + d1[2]*w1]; }
   let r = r0 + (r1 - r0) * (1 - Math.exp(-dt * 4));
   const half = (N - 2 * Math.min(G.layer, S - 1)) / 2 + 1.3, m = Math.max(Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2]));
   if (r * m < half) r = half / m;
-  seekP = [d[0] * r, d[1] * r, d[2] * r];
-  seekHere = golden >= 0 && ang - step < 0.06 && Math.abs(r - r1) < 0.4;
+  st.p = [d[0] * r, d[1] * r, d[2] * r];
+  return ang - step < 0.03 && Math.abs(r - r1) < 0.3;
 }
+function updSpecials(dt) {
+  for (const id of ['laser', 'seeker', 'bomber']) {
+    const st = SD[id];
+    if (!G.P[id] || finished) { st.p = null; st.job = null; st.here = false; continue; }
+    const orbit = specialPos(specialIndex(id), T);
+    if (!st.p) st.p = orbit.slice();
+    let goal = orbit;
+    if (id === 'seeker' && golden >= 0) goal = hoverAt(worldOf(golden), normalOf(golden), 2.2);
+    else if (st.job) goal = st.job.goal;
+    if (goal !== orbit) goal = [goal[0], goal[1] + Math.sin(T * 3) * .08, goal[2]];
+    const here = flyStep(st, goal, dt);
+    st.here = id === 'seeker' ? golden >= 0 && here : here;
+    if (id === 'laser' && st.job) laserWork(dt, st, st.job);
+    if (id === 'bomber' && st.job) bomberWork(dt, st, st.job);
+  }
+  updBomb(dt);
+}
+
+// Laserdrohne: stellt sich vor eine Würfelseite und fährt mit dem Strahl
+// wie ein Scanner eine ganze Reihe Würfelchen entlang
+function fireLaser() {
+  if (SD.laser.job) return false;
+  const idx = randomTarget(); if (idx < 0) return false;
+  const ci = [ix(idx), jy(idx), kz(idx)], w = worldOf(idx), a = w.map(Math.abs);
+  const ax = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2;
+  const others = [0, 1, 2].filter(x => x !== ax), la = others[(Math.random() * 2) | 0];
+  const nrm = [0, 0, 0]; nrm[ax] = Math.sign(w[ax]) || 1;
+  const lo = G.layer, hi = N - 1 - G.layer, back = Math.random() < .5;
+  const cells = [], pts = [];
+  for (let k = 0; k <= hi - lo; k++) {
+    const c = ci.slice(); c[la] = back ? hi - k : lo + k;
+    cells.push(c[0] + N * (c[1] + N * c[2]));
+    pts.push([c[0] - HALF + nrm[0] * .5, c[1] - HALF + nrm[1] * .5, c[2] - HALF + nrm[2] * .5]);
+  }
+  const len = cells.length, mid = lerp3(pts[0], pts[len - 1], .5);
+  SD.laser.job = { phase: 'go', t: 0, cells, pts, nrm, mid, goal: hoverAt(mid, nrm, clamp(len * .5, 3.2, 9)),
+    dur: Math.max(.9, len * .065), done: 0, gain: 0, layer: G.layer };
+  return true;
+}
+function laserPoint(job) {
+  const P = job.pts, len = P.length; if (len < 2) return P[0];
+  const x = clamp(job.t / job.dur, 0, 1) * (len - 1), k = Math.min(len - 2, Math.floor(x));
+  return lerp3(P[k], P[k + 1], x - k);
+}
+function laserWork(dt, st, job) {
+  if (job.layer !== G.layer) { // Schicht ist weg: Ertrag zeigen und neu zielen
+    if (job.gain > 0) { const sc = screenOf(job.mid); popup(sc[0], sc[1], '+' + fmt(job.gain)); }
+    st.job = null; if (job.phase !== 'scan') fireLaser(); return;
+  }
+  job.t += dt;
+  if (job.phase === 'go') { if (st.here || job.t > 4) { job.phase = 'aim'; job.t = 0; } return; }
+  if (job.phase === 'aim') { if (job.t >= .3) { job.phase = 'scan'; job.t = 0; sfx.laser(); } return; }
+  const len = job.cells.length, x = clamp(job.t / job.dur, 0, 1) * (len - 1);
+  const upto = Math.min(len, Math.floor(x + .5) + 1);
+  while (job.done < upto) {
+    const k = job.done++, id = job.cells[k], q = job.pts[k];
+    addP(q[0], q[1], q[2], 0, 0, 0, .6, .34, 1, .32, .42, 3.2, 0);
+    if (id !== golden && alive[id] && shellOf[id] === G.layer) {
+      const d = Math.max(tapDmg(), droneDmg()) * laserMul(G.P.laser) * frenzyMul();
+      job.gain += hitVoxel(id, d, 1, 1);
+    }
+  }
+  if (!reduceMotion && Math.random() < dt * 45) {
+    const b = laserPoint(job), n = job.nrm;
+    addP(b[0], b[1], b[2], n[0] * 3 + rnd(-2, 2), n[1] * 3 + rnd(-1, 3), n[2] * 3 + rnd(-2, 2), rnd(.2, .4), rnd(.08, .14), 1, rnd(.45, .75), .55, 3.2, 7);
+  }
+  if (job.t >= job.dur) {
+    if (job.gain > 0) { const sc = screenOf(job.mid); popup(sc[0], sc[1], '+' + fmt(job.gain)); }
+    st.job = null;
+  }
+}
+
+// Sprengdrohne: fliegt über ein Würfelchen (am liebsten oben) und wirft die Bombe ab.
+// Die Ladung hat die Werkstatt-Werte der Sprengladung.
+function bombTarget() {
+  let any = -1;
+  for (let k = 0; k < 30; k++) {
+    const c = act[(Math.random() * actLen) | 0]; if (c === golden) continue;
+    if (any < 0) any = c;
+    if (normalOf(c)[1] > .5) return c;
+  }
+  return any;
+}
+function dropBomb() {
+  if (SD.bomber.job || SD.bomber.bomb) return false;
+  const idx = bombTarget(); if (idx < 0) return false;
+  const n = normalOf(idx), w = worldOf(idx);
+  SD.bomber.job = { phase: 'go', t: 0, idx, n, goal: hoverAt(w, n, 4), layer: G.layer };
+  return true;
+}
+function bomberWork(dt, st, job) {
+  job.t += dt;
+  if (job.phase === 'go') {
+    if (job.layer !== G.layer) { st.job = null; dropBomb(); return; } // Ziel ist weg: neues suchen
+    if (st.here || job.t > 4) { job.phase = 'aim'; job.t = 0; }
+    return;
+  }
+  if (job.phase === 'aim') {
+    if (job.t < .25) return;
+    const w = worldOf(job.idx), n = job.n, tgt = [w[0] + n[0] * .5, w[1] + n[1] * .5, w[2] + n[2] * .5];
+    const s = [st.p[0] - n[0] * .6, st.p[1] - n[1] * .6, st.p[2] - n[2] * .6];
+    const dist = Math.hypot(tgt[0] - s[0], tgt[1] - s[1], tgt[2] - s[2]);
+    SD.bomber.bomb = { s, p: s.slice(), tgt, idx: job.idx, t: 0, dur: Math.sqrt(2 * dist / 20) };
+    sfx.drop();
+    job.phase = 'leave'; job.t = 0; return;
+  }
+  if (job.t >= .35) st.job = null; // kurz nachschauen, dann zurück auf die Bahn
+}
+function updBomb(dt) {
+  const b = SD.bomber.bomb; if (!b) return;
+  if (finished) { SD.bomber.bomb = null; return; }
+  b.t += dt;
+  const f = Math.min(1, b.t / b.dur);
+  b.p = lerp3(b.s, b.tgt, f * f);
+  if (!reduceMotion && Math.random() < dt * 30) addP(b.p[0] + rnd(-.1, .1), b.p[1] + rnd(-.1, .1), b.p[2] + rnd(-.1, .1), rnd(-.3, .3), rnd(0, .6), rnd(-.3, .3), rnd(.25, .45), rnd(.08, .13), .55, .52, .5, 0, -.5);
+  if (f >= 1) { SD.bomber.bomb = null; bombBlast(b.idx); }
+}
+function bombBlast(idx) {
+  const w = worldOf(idx), list = gather(ix(idx), jy(idx), kz(idx), blastRAt(G.L.blast));
+  const d = Math.max(tapDmg(), droneDmg()) * blastMulAt(G.L.blast) * frenzyMul();
+  let gain = 0;
+  for (const id of list) if (id !== golden) gain += hitVoxel(id, d, 1, 1);
+  for (let q = 0; q < 34; q++) addP(w[0], w[1], w[2], rnd(-8, 8), rnd(-3, 10), rnd(-8, 8), rnd(.25, .55), rnd(.15, .3), 1, rnd(.5, .85), .3, 3, 10);
+  sfx.boom(0.5); if (!reduceMotion) cam.shake = Math.max(cam.shake, .15);
+  if (gain > 0) { const sc = screenOf(w); popup(sc[0], sc[1], '+' + fmt(gain), true); }
+}
+
+// Goldsucher: fliegt sofort zum goldenen Würfelchen, schwebt davor
+// und holt es, wenn du es nicht selbst antippst
 function seekGolden() {
   const w = worldOf(golden);
-  beamLine(seekP || specialPos(specialIndex('seeker'), T), w, [1, .82, .35], 5, .25);
+  beamLine(SD.seeker.p || specialPos(specialIndex('seeker'), T), w, [1, .82, .35], 5, .25);
   const sc = screenOf(w);
   collectGolden(sc[0], sc[1], true);
 }
@@ -918,12 +1010,28 @@ function buildFX() {
   const nd = finished ? 0 : Math.min(G.L.drone, 24);
   for (let i = 0; i < nd; i++) { const p = dronePos(i, T), c = skinColor(i, nd); put(p[0], p[1], p[2], 0.55, c[0], c[1], c[2], droneGlow(i)); }
   if (!finished) specials().forEach((sd, n) => {
-    const p = sd.id === 'seeker' && seekP ? seekP : specialPos(n, T), c = sd.c;
+    const st = SD[sd.id], p = st && st.p ? st.p : specialPos(n, T), c = sd.c;
     put(p[0], p[1], p[2], 1.15, c[0], c[1], c[2], 0);
     for (const [dx, dz] of [[-.85, -.85], [.85, -.85], [-.85, .85], [.85, .85]]) put(p[0] + dx, p[1] + .32, p[2] + dz, 0.46, c[0] * .5, c[1] * .5, c[2] * .5, 0);
     const blink = (T * 1.6 + n * .37) % 1 < .2;
     put(p[0], p[1] + .78, p[2], 0.32, 1, blink ? 1 : .35, blink ? 1 : .3, blink ? 3.2 : 2.6);
   });
+  const lj = SD.laser.job;
+  if (!finished && lj && (lj.phase === 'aim' || lj.phase === 'scan')) {
+    // Zielreihe: dünne Leuchtpunkte, die der Scanner gleich abfährt
+    for (let k = lj.done; k < lj.pts.length; k++) { const q = lj.pts[k]; put(q[0], q[1], q[2], .16, 1, .3, .42, lj.phase === 'aim' ? 2.45 + .35 * Math.abs(Math.sin(T * 14)) : 2.6); }
+    if (lj.phase === 'scan' && SD.laser.p) {
+      const a = SD.laser.p, b = laserPoint(lj), L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]), k = Math.max(4, Math.ceil(L / .26)), fl = Math.sin(T * 70);
+      for (let q = 1; q < k; q++) { const f = q / k; put(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, .11 + .015 * fl, 1, .3, .42, 3.25); }
+      put(b[0], b[1], b[2], .44 + .06 * fl, 1, .55, .62, 3.5);
+    }
+  }
+  const bb = SD.bomber.bomb;
+  if (!finished && bb) {
+    put(bb.p[0], bb.p[1], bb.p[2], .64, .3, .27, .26, 0);
+    const bl = (T * 9) % 1 < .5;
+    put(bb.p[0], bb.p[1] + .42, bb.p[2], .22, 1, bl ? .35 : .2, .2, bl ? 3.4 : 2.3);
+  }
   if (finished) {
     const ang = T * 0.5, ca = Math.cos(ang), sa = Math.sin(ang), lift = 1.6 + Math.sin(T * 1.3) * 0.25, pulse = 0.88 + 0.12 * Math.sin(T * 2.6);
     for (const [x, y, z] of CRYSTAL) {
@@ -989,6 +1097,7 @@ const sfx = {
   chime() { if (!AC || !G.sound) return; const t = AC.currentTime; [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.55, 'sine', 0.16, t + i * 0.09)); },
   sparkle() { if (!AC || !G.sound) return; const t = AC.currentTime; [1568, 1760, 2093, 2349, 2637, 3136].forEach((f, i) => tone(f, 0.3, 'sine', 0.07, t + i * 0.05)); },
   boom(v = 1) { if (!AC || !G.sound) return; const t = AC.currentTime; burst(260, 0.7, 0.55, 0.9 * v, t, 'lowpass'); tone(120, 0.4, 'sine', 0.5 * v, t, 38); },
+  drop() { if (!AC || !G.sound) return; const t = AC.currentTime; tone(1300, 0.5, 'sine', 0.035, t, 420); },
   laser() { if (!AC || !G.sound) return; const t = AC.currentTime; tone(1500, 0.26, 'sawtooth', 0.03, t, 260); burst(3200, 1.4, 0.18, 0.1, t); },
   gem() { if (!AC || !G.sound) return; const t = AC.currentTime; [1318.5, 1760, 2637].forEach((f, i) => tone(f, 0.4, 'sine', 0.09, t + i * 0.06)); },
   finale() { if (!AC || !G.sound) return; const t = AC.currentTime; [392, 523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, 1.4, 'sine', 0.12, t + i * 0.16)); }
@@ -1442,7 +1551,7 @@ function prestige(reward) {
   G.c++; G.coins = capitalAt(G.P.capital); G.layer = 0; G.frenzy = 0; G.stats.cubeSec = 0; G.golden = 0;
   for (const k in G.L) G.L[k] = 0;
   G.L.drone = 3 * G.P.swarm;
-  blastLeft = 0; blastArmed = false; combo = 0; pN = 0; laserCd = 3; bomberCd = 10; goldenTimer = 40; seekP = null;
+  blastLeft = 0; blastArmed = false; combo = 0; pN = 0; laserCd = 3; bomberCd = 10; goldenTimer = 40; resetSpecials();
   buildCube(G.c); activateShell(0);
   fitTarget = fitFor(N); cam.fit = fitTarget * 1.6;
   renderShop(); updBlast(); updHUD(); save();
@@ -1597,10 +1706,10 @@ function update(dt) {
       else if (Math.random() < dt * 10) { const p = worldOf(golden), n = normalOf(golden); addP(p[0] + n[0]*.6 + rnd(-.45,.45), p[1] + n[1]*.6 + rnd(-.45,.45), p[2] + n[2]*.6 + rnd(-.45,.45), n[0]*1.6, n[1]*1.6 + 1, n[2]*1.6, .55, .12, 1, .86, .4, 3.2, 0); }
     }
     else { goldenTimer -= dt; if (goldenTimer <= 0) { goldenTimer = rnd(45, 90) * (1 - 0.1 * G.P.seeker); spawnGolden(); } }
-    updSeeker(dt);
-    if (golden >= 0 && G.P.seeker > 0 && goldenLife < 8 && (seekHere || goldenLife < 1.5)) seekGolden();
-    if (actLen > 0 && G.P.laser > 0) { laserCd -= dt; if (laserCd <= 0) { laserCd = laserInt(); fireLaser(); } }
-    if (actLen > 0 && G.P.bomber > 0) { bomberCd -= dt; if (bomberCd <= 0) { bomberCd = bomberInt(); dropBomb(); } }
+    updSpecials(dt);
+    if (golden >= 0 && G.P.seeker > 0 && goldenLife < 8 && (SD.seeker.here || goldenLife < 1.5)) seekGolden();
+    if (actLen > 0 && G.P.laser > 0) { laserCd -= dt; if (laserCd <= 0 && !SD.laser.job && fireLaser()) laserCd = laserInt(); }
+    if (actLen > 0 && G.P.bomber > 0) { bomberCd -= dt; if (bomberCd <= 0 && !SD.bomber.job && !SD.bomber.bomb && dropBomb()) bomberCd = bomberInt(); }
     if (G.P.robot && G.robotOn) { robotT -= dt; if (robotT <= 0) { robotT = 0.5; robotTick(); } }
     if (!highlightWarned && actLen > 0 && actLen <= highlightThreshold()) {
       highlightWarned = true; dirty = true;
@@ -1667,7 +1776,7 @@ async function start(hot) {
   if (finished) setTimeout(showFinale, 800);
   save();
   requestAnimationFrame(frame);
-  if (location.hash === '#test') window.__nw = { G, doTap, spawnGolden, renderMenu, openSheet, openForge, fireLaser, dropBomb, prestige, showFinale, catchUp, get N() { return N; }, get actLen() { return actLen; }, get finished() { return finished; }, layerComplete, updShop, updHUD, cam, rawPick: pick, get seek() { return { p: seekP, here: seekHere, golden, life: goldenLife }; } };
+  if (location.hash === '#test') window.__nw = { G, doTap, spawnGolden, renderMenu, openSheet, openForge, fireLaser, dropBomb, prestige, showFinale, catchUp, get N() { return N; }, get actLen() { return actLen; }, get finished() { return finished; }, layerComplete, updShop, updHUD, cam, rawPick: pick, get sd() { return SD; }, get golden() { return golden; }, get goldenLife() { return goldenLife; } };
 }
 try { window.claude?.hot?.snapshot?.(() => ({ save: snapshot() })); } catch (e) {}
 const hotApi = window.claude?.hot;

@@ -892,14 +892,15 @@ function updSpecials(dt) {
 // Kleine Bohrdrohnen: jede sichtbare Drohne fliegt zu einem Würfelchen, schwebt davor
 // und baut es ab. Danach nimmt sie ein Nachbar-Würfelchen oder fliegt weiter.
 const DR = [], CLAIM = new Set();
-function resetDrones() { DR.length = 0; CLAIM.clear(); droneAcc = 0; }
+let droneSpill = 0;
+function resetDrones() { DR.length = 0; CLAIM.clear(); droneSpill = 0; }
 const minable = idx => idx >= 0 && idx !== golden && alive[idx] && shellOf[idx] === G.layer;
 function nearTarget(from) {
   const ci = ix(from), cj = jy(from), ck = kz(from);
   let best = -1, bd = 99;
-  for (let dk = -2; dk <= 2; dk++) { const k = ck + dk; if (k < 0 || k >= N) continue;
-    for (let dj = -2; dj <= 2; dj++) { const j = cj + dj; if (j < 0 || j >= N) continue;
-      for (let di = -2; di <= 2; di++) { const i = ci + di; if (i < 0 || i >= N) continue;
+  for (let dk = -3; dk <= 3; dk++) { const k = ck + dk; if (k < 0 || k >= N) continue;
+    for (let dj = -3; dj <= 3; dj++) { const j = cj + dj; if (j < 0 || j >= N) continue;
+      for (let di = -3; di <= 3; di++) { const i = ci + di; if (i < 0 || i >= N) continue;
         const dd = di*di + dj*dj + dk*dk; if (dd >= bd) continue;
         const idx = i + N * (j + N * k);
         if (minable(idx) && !CLAIM.has(idx)) { best = idx; bd = dd; }
@@ -934,14 +935,14 @@ function droneGoal(d, i) {
 function updDrones(dt) {
   const V = finished ? 0 : Math.min(G.L.drone, 24);
   while (DR.length > V) { const d = DR.pop(); CLAIM.delete(d.tgt); }
-  while (DR.length < V) DR.push({ p: outside(dronePos(DR.length, T)), tgt: -1, ok: false, beamed: false });
+  while (DR.length < V) DR.push({ p: outside(dronePos(DR.length, T)), tgt: -1, ok: false, beamed: false, acc: 0, hits: 0 });
   for (let i = 0; i < DR.length; i++) {
     const d = DR[i]; d.beamed = false;
     if (!minable(d.tgt) && actLen > 0) retarget(d);
     if (!minable(d.tgt)) { if (d.tgt >= 0) CLAIM.delete(d.tgt); d.tgt = -1; }
     const goal = d.tgt >= 0 ? droneGoal(d, i) : dronePos(i, T);
     flyTo(d, goal, dt);
-    d.ok = d.tgt >= 0 && Math.hypot(d.p[0] - goal[0], d.p[1] - goal[1], d.p[2] - goal[2]) < 1.2;
+    d.ok = d.tgt >= 0 && Math.hypot(d.p[0] - goal[0], d.p[1] - goal[1], d.p[2] - goal[2]) < 1.6;
   }
 }
 
@@ -1750,28 +1751,42 @@ function update(dt) {
   if (pendingDone && !finished) layerComplete(false);
   // Drohnen
   updDrones(dt);
-  if (!finished && G.L.drone > 0 && actLen > 0) {
-    const perSec = G.L.drone * droneRate();
-    droneAcc = Math.min(droneAcc + perSec * dt, perSec * 2 + 1); // Treffer warten, solange alle Drohnen fliegen
-    const raw = Math.floor(droneAcc), work = DR.filter(x => x.ok);
-    if (raw > 0 && work.length) {
-      const n = Math.min(raw, 300), scale = raw / n, dmg = droneDmg() * frenzyMul() * scale, nd = DR.length;
-      let used = 0, beams = 0, w = 0, idle = 0;
-      while (used < n && actLen > 0 && !finished && idle < work.length) {
-        const dd = work[w++ % work.length];
-        if (!dd.ok) { idle++; continue; }
-        if (!minable(dd.tgt) && !retarget(dd)) { idle++; continue; }
-        idle = 0;
-        const idx = dd.tgt, g = hitVoxel(idx, dmg, 1, 1); used++;
+  if (!finished && G.L.drone > 0 && actLen > 0 && DR.length) {
+    // Jede sichtbare Drohne arbeitet im eigenen Takt (sie steht für G.L.drone / DR.length Drohnen).
+    // Während sie fliegt, sammelt sie bis zu 2 s Treffer an und holt sie danach mit dreifachem Tempo nach.
+    // Was darüber hinausgeht (nur bei sehr vielen, sehr starken Drohnen), erledigen die unsichtbaren Drohnen verteilt.
+    const nd = DR.length, per = G.L.drone * droneRate() / nd, cap = per * 2 + 1, dmg0 = droneDmg() * frenzyMul();
+    let beams = 0;
+    for (let i = 0; i < nd && actLen > 0 && !finished; i++) {
+      const dd = DR[i];
+      dd.acc += per * dt; if (dd.acc > cap) { droneSpill += dd.acc - cap; dd.acc = cap; }
+      if (!dd.ok || dd.acc < 1) continue;
+      const want = Math.min(Math.floor(dd.acc), Math.max(1, Math.ceil(per * dt * 3)));
+      const n = Math.min(want, 40), scale = want / n, dmg = dmg0 * scale;
+      let used = 0;
+      while (used < n && actLen > 0 && !finished) {
+        if (!minable(dd.tgt) && !retarget(dd)) break; // nächstes Ziel liegt woanders: erst hinfliegen
+        const idx = dd.tgt, g = hitVoxel(idx, dmg, 1, 1); used++; dd.hits++;
         if (!dd.beamed && beams < 12) {
           const v = worldOf(idx), nn = normalOf(idx);
-          beamLine(dd.p, [v[0] + nn[0] * .46, v[1] + nn[1] * .46, v[2] + nn[2] * .46], skinColor(DR.indexOf(dd), nd), 3, .1);
+          beamLine(dd.p, [v[0] + nn[0] * .46, v[1] + nn[1] * .46, v[2] + nn[2] * .46], skinColor(i, nd), 3, .1);
           dd.beamed = true; beams++;
         }
         if (g) sfx.plink();
         if (pendingDone) layerComplete(false);
       }
-      droneAcc -= used * scale;
+      dd.acc -= used * scale;
+    }
+    if (droneSpill >= 1 && actLen > 0 && !finished) {
+      const raw = Math.floor(droneSpill), n = Math.min(raw, 300), scale = raw / n, dmg = dmg0 * scale;
+      let used = 0;
+      for (let h = 0; h < n && actLen > 0 && !finished; h++) {
+        const idx = act[(Math.random() * actLen) | 0]; used++;
+        if (idx === golden) continue;
+        if (hitVoxel(idx, dmg, 1, 1)) sfx.plink();
+        if (pendingDone) layerComplete(false);
+      }
+      droneSpill -= used * scale;
     }
   }
   // Goldene Würfelchen
@@ -1801,7 +1816,6 @@ function update(dt) {
   if (!reduceMotion && cam.idle > 7 && ptrs.size === 0) cam.yaw += dt * 0.07 * Math.min(1, (cam.idle - 7) / 3);
   if (finished && !reduceMotion) cam.yaw += dt * 0.15;
 }
-var droneAcc = 0;
 function frame(ts) {
   requestAnimationFrame(frame);
   if (!lastTs) lastTs = ts;

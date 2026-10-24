@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Unbounded:wght@500;700;800&display=swap">
 <style>
-/* Layout: Vollbild-Bühne mit schwebendem Würfel im Lichtkegel; oben Münz-HUD mit Schichtleiste, unten Dock; Werkstatt als Bottom-Sheet */
+/* Layout: Vollbild-Bühne mit schwebendem Würfel im Lichtkegel; oben Münz-HUD mit Schichtleiste und Kristall-Chip, unten Dock; Werkstatt und Kristallschmiede als Bottom-Sheets */
 :root{
   --ink:#0d0f21;
   --stage:#1a1d3a;
@@ -32,6 +32,10 @@
   --cyan:#9fe6ff;
   --warn:#ff9180;
   --layer:#e8e5dc;
+  --crystal:#c3a6ff;
+  --crystal-hi:#e4d7ff;
+  --crystal-deep:#8466dc;
+  --crystal-ink:#1d1236;
   --f-display:'Unbounded', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   --f-body:'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme:dark;
@@ -50,18 +54,23 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 
 /* HUD */
-.hud{position:fixed;top:0;left:0;right:0;z-index:5;pointer-events:none;display:grid;gap:12px;
+.hud{position:fixed;top:0;left:0;right:0;z-index:5;pointer-events:none;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;
   padding-top:calc(env(safe-area-inset-top,0px) + 12px);
   padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));
   background:linear-gradient(180deg, rgba(13,15,33,.72) 0%, rgba(13,15,33,.38) 70%, rgba(13,15,33,0) 100%);padding-bottom:18px}
 .hud-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.purse{display:flex;align-items:center;gap:10px;min-width:0}
+.purse{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
+.purse-txt{min-width:0;flex:1 1 auto}
 .purse .coin{width:30px;height:30px;flex:none;filter:drop-shadow(0 3px 8px rgba(243,196,91,.35))}
 .coins{font-family:var(--f-display);font-weight:700;font-size:27px;line-height:1.05;letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
 .rate{font-size:13px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rate b{color:var(--cyan);font-weight:600}
 .tools{display:flex;gap:8px;align-items:center;pointer-events:auto;flex:none}
-.badge{font-family:var(--f-display);font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 10px;white-space:nowrap}
+.gem-btn{height:42px;border-radius:13px;border:1px solid rgba(195,166,255,.32);background:var(--panel);display:flex;align-items:center;gap:7px;padding:0 13px 0 10px;cursor:pointer;position:relative;
+  font-family:var(--f-display);font-weight:700;font-size:14px;color:var(--crystal-hi);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gem-btn svg{width:20px;height:20px}
+.gem-btn:active{transform:scale(.96)}
+.gem-btn .dot{position:absolute;top:-4px;right:-4px;width:13px;height:13px;border-radius:50%;background:var(--crystal);border:3px solid var(--ink)}
 .pill{font-family:var(--f-display);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-ink);background:var(--gold);border-radius:999px;padding:6px 10px;white-space:nowrap;animation:pulse 1s ease-in-out infinite alternate}
 @keyframes pulse{to{box-shadow:0 0 18px rgba(243,196,91,.7)}}
 .icon-btn{width:42px;height:42px;border-radius:13px;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center;cursor:pointer;padding:0;flex:none}
@@ -94,7 +103,10 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 .blast.ready{color:var(--warn)}
 .blast.armed{background:var(--warn);color:var(--ink);box-shadow:0 0 0 6px rgba(255,145,128,.25)}
 .blast.locked{color:var(--muted);opacity:.7}
-.combo{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 88px);transform:translateX(-50%);z-index:6;pointer-events:none;
+.status{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 86px);z-index:6;pointer-events:none;display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+.status .pill{padding:8px 13px;font-size:11px}
+.combo{
   font-family:var(--f-display);font-size:12px;letter-spacing:.05em;text-transform:uppercase;background:var(--panel);border:1px solid var(--line);padding:7px 13px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .combo b{color:var(--gold);font-weight:700}
 
@@ -123,6 +135,26 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
   display:flex;align-items:center;justify-content:center;gap:6px;padding:0 12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .buy svg{width:15px;height:15px}
 .buy small{font-weight:600;opacity:.75}
+.buy.gem{background:var(--crystal);color:var(--crystal-ink)}
+.buy.owned{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.gemrow .up-ico{color:var(--crystal)}
+.gem-have{display:flex;align-items:center;gap:6px;font-family:var(--f-display);font-weight:700;font-size:15px;color:var(--crystal-hi);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gem-have svg{width:20px;height:20px}
+.skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
+.skin{display:grid;justify-items:center;gap:5px;padding:12px 2px 10px;border-radius:15px;background:var(--wash);border:1px solid var(--line);cursor:pointer;font-size:12px;letter-spacing:-.01em;font-weight:600;min-width:0}
+.skin > svg{width:34px;height:34px}
+.skin small{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.skin small svg{width:11px;height:11px}
+.skin.on{border-color:var(--crystal);box-shadow:inset 0 0 0 1px var(--crystal)}
+.skin.on small{color:var(--crystal-hi)}
+.skin:disabled{opacity:.45;cursor:default}
+.robot{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:15px;border:1px dashed rgba(195,166,255,.4);color:var(--crystal)}
+.robot > span{flex:1;min-width:0;color:var(--fg);font-size:14px;line-height:1.35}
+.robot small{color:var(--muted);font-size:12.5px}
+.switch{width:52px;height:30px;border-radius:99px;border:0;background:var(--wash);position:relative;cursor:pointer;flex:none;padding:0;box-shadow:inset 0 0 0 1px var(--line)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--muted);transition:transform .2s}
+.switch[aria-pressed="true"]{background:var(--crystal)}
+.switch[aria-pressed="true"]::after{transform:translateX(22px);background:var(--crystal-ink)}
 .buy:disabled{background:var(--wash);color:var(--muted);cursor:default}
 .buy:not(:disabled):active{transform:scale(.97)}
 .stats{display:grid;grid-template-columns:1fr auto;gap:10px 16px;margin:0;font-variant-numeric:tabular-nums}
@@ -143,11 +175,14 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
   animation:tIn .3s ease both, tOut .45s ease forwards;animation-delay:0s, var(--hold,2.6s)}
 .toast b{color:var(--gold)}
 .toast.gold{border-color:rgba(243,196,91,.55);box-shadow:0 0 30px rgba(243,196,91,.2)}
+.toast.gem{border-color:rgba(195,166,255,.55);box-shadow:0 0 30px rgba(195,166,255,.2)}
+.toast.gem b,.toast b.g{color:var(--crystal-hi)}
 @keyframes tIn{from{opacity:0;transform:translateY(-8px) scale(.97)}}
 @keyframes tOut{to{opacity:0;transform:translateY(-6px)}}
 .pop{position:fixed;z-index:7;pointer-events:none;font-family:var(--f-display);font-weight:700;font-size:15px;color:var(--gold);
   text-shadow:0 2px 10px rgba(0,0,0,.7);transform:translate(-50%,-50%);animation:pop .9s ease-out forwards;white-space:nowrap;font-variant-numeric:tabular-nums}
 .pop.big{font-size:20px;color:var(--gold-hi)}
+.pop.gem{font-size:17px;color:var(--crystal-hi)}
 @keyframes pop{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}15%{opacity:1;transform:translate(-50%,-75%) scale(1.06)}100%{opacity:0;transform:translate(-50%,-200%) scale(1)}}
 .veil{position:fixed;inset:0;z-index:30;background:rgba(6,7,18,.62);display:grid;grid-template-columns:minmax(0,1fr);place-items:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
   padding-block:24px;padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));animation:tIn .3s ease}
@@ -156,6 +191,12 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 .card h2{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.2;margin:0;text-wrap:balance}
 .card p{margin:0;line-height:1.55}
 .card .meta{color:var(--muted);font-size:13px}
+.card .eyebrow.gem{color:var(--crystal)}
+.reward{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:15px;background:rgba(195,166,255,.08);border:1px solid rgba(195,166,255,.28)}
+.reward .gem-big{display:flex;align-items:center;gap:8px;font-family:var(--f-display);font-weight:700;font-size:24px;color:var(--crystal-hi);font-variant-numeric:tabular-nums;white-space:nowrap}
+.reward .gem-big svg{width:28px;height:28px}
+.reward > span:last-child{font-size:13.5px;line-height:1.4;min-width:0}
+.reward small{color:var(--muted);font-size:12.5px}
 .card .big-num{font-family:var(--f-display);font-weight:700;font-size:24px;color:var(--gold);font-variant-numeric:tabular-nums}
 .primary{height:52px;border-radius:15px;border:0;cursor:pointer;background:linear-gradient(180deg, var(--gold-hi), var(--gold) 60%, var(--gold-deep));color:var(--gold-ink);font-family:var(--f-display);font-weight:700;font-size:15px}
 .hint{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);transform:translateX(-50%);z-index:6;pointer-events:none;width:min(340px, calc(100% - 32px));
@@ -175,14 +216,13 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
   <div class="hud-row">
     <div class="purse">
       <svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8.5 4.8v9.4L12 21.5l-8.5-4.8V7.3z" fill="var(--gold)"/><path d="M12 12l8.5-4.7v9.4L12 21.5z" fill="var(--gold-deep)"/><path d="M12 12L3.5 7.3 12 2.5l8.5 4.8z" fill="var(--gold-hi)"/></svg>
-      <div style="min-width:0">
+      <div class="purse-txt">
         <div class="coins" id="coins">0</div>
         <div class="rate" id="rate">Tippe auf den Würfel</div>
       </div>
     </div>
     <div class="tools">
-      <span class="pill" id="frenzy" hidden>Goldrausch</span>
-      <span class="badge" id="cubeBadge">Würfel 1</span>
+      <button class="gem-btn" id="gemBtn" aria-label="Kristallschmiede öffnen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l4 5-9 11L3 9z" fill="var(--crystal)"/><path d="M3 9h18l-9 11z" fill="var(--crystal-deep)"/><path d="M7 4h10l4 5H3z" fill="var(--crystal-hi)"/></svg><span id="gemCount">0</span><i class="dot" id="gemDot" hidden></i></button>
       <button class="icon-btn" id="menuBtn" aria-label="Logbuch öffnen"><svg class="i" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg></button>
     </div>
   </div>
@@ -194,7 +234,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 </header>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
-<div class="combo" id="combo" hidden></div>
+<div class="status"><span class="pill" id="frenzy" hidden>Goldrausch</span><div class="combo" id="combo" hidden></div></div>
 <div class="hint" id="hint" hidden><b>Was ist im Würfel?</b> Tippe auf ihn und klopf ihn Würfelchen für Würfelchen ab.<small>Ziehen dreht · zwei Finger zoomen · Münzen gibst du in der Werkstatt aus</small></div>
 
 <nav class="dock">
@@ -215,6 +255,15 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
     <button class="icon-btn" id="shopClose" aria-label="Werkstatt schließen"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div class="sheet-body" id="shopList"></div>
+</section>
+
+<section class="sheet" id="forge" aria-label="Kristallschmiede">
+  <div class="sheet-head">
+    <h2>Kristallschmiede</h2>
+    <span class="gem-have" id="forgeHave"></span>
+    <button class="icon-btn" id="forgeClose" aria-label="Kristallschmiede schließen"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="forgeList"></div>
 </section>
 
 <section class="sheet" id="menu" aria-label="Logbuch">
@@ -251,7 +300,18 @@ const ICO = {
   lock:  '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   sndOn: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   sndOff:'<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
-  coin:  '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="currentColor" stroke="none" opacity=".9"/>'
+  coin:  '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="currentColor" stroke="none" opacity=".9"/>',
+  gem:   '<path d="M7 4h10l4 5-9 11L3 9z" fill="currentColor" stroke="none"/>',
+  gemFill:'<path d="M7 4h10l4 5-9 11L3 9z" fill="var(--crystal)" stroke="none"/><path d="M3 9h18l-9 11z" fill="var(--crystal-deep)" stroke="none"/><path d="M7 4h10l4 5H3z" fill="var(--crystal-hi)" stroke="none"/>',
+  laser: '<rect x="7.5" y="3.5" width="9" height="5" rx="1.5"/><path d="M4 6h3.5M16.5 6H20M12 8.5V21M9.5 13.5l2.5-2 2.5 2"/>',
+  seeker:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/><path d="M10.5 7.3l2.8 1.6v3.2l-2.8 1.6-2.8-1.6V8.9z"/>',
+  bomber:'<circle cx="11" cy="14" r="6.5"/><path d="M15.6 9.4l2-2"/><path d="M18.5 3.5v1.6M21 6.5h-1.6M20.3 4.2l-1.1 1.1"/>',
+  km:    '<path d="M4 20l7-7"/><path d="M13 3.5l3 3-5 5-3-3z"/><path d="M18 12.5l2.5 3-2.5 3-2.5-3z"/>',
+  kr:    '<circle cx="12" cy="12" r="2.2"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8M5.2 5.2a9.6 9.6 0 0 0 0 13.6M18.8 5.2a9.6 9.6 0 0 1 0 13.6"/>',
+  swarm: '<rect x="2.5" y="12" width="6" height="3.6" rx="1.2"/><rect x="15.5" y="12" width="6" height="3.6" rx="1.2"/><rect x="9" y="4.5" width="6" height="3.6" rx="1.2"/><path d="M5.5 15.6V18M18.5 15.6V18M12 8.1v2.4"/>',
+  capital:'<ellipse cx="12" cy="6.5" rx="7" ry="2.5"/><path d="M5 6.5v4c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-4M5 10.5v4c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-4M5 14.5v3c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-3"/>',
+  longnight:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><path d="M15 4.5h3l-3 3.5h3"/>',
+  robot: '<rect x="5" y="8" width="14" height="11" rx="2.5"/><path d="M12 8V5"/><circle cx="12" cy="4" r="1.2"/><path d="M9.5 12.5v1.2M14.5 12.5v1.2M9 16.5h6M3 12v3M21 12v3"/>'
 };
 const svg = (k, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICO[k]}</svg>`;
 
@@ -267,6 +327,31 @@ const UPS = [
   { id:'blast', name:'Sprengladung',    base:400,  g:2.40, max:10,  need:null },
   { id:'night', name:'Nachtschicht',    base:500,  g:1.90, max:11,  need:'drone' },
 ];
+
+// Kristallschmiede: dauerhafte Freischaltungen, bezahlt mit Kernkristallen
+const PERKS = [
+  { id:'laser',     sec:'drone', name:'Laserdrohne',       max:5,   costs:[8, 12, 18, 27, 40] },
+  { id:'seeker',    sec:'drone', name:'Goldsucher',        max:5,   costs:[6, 9, 14, 21, 32] },
+  { id:'bomber',    sec:'drone', name:'Sprengdrohne',      max:5,   costs:[10, 15, 22, 33, 50] },
+  { id:'km',        sec:'perm',  name:'Kristallmeißel',    max:200, base:3, g:1.35 },
+  { id:'kr',        sec:'perm',  name:'Kernresonanz',      max:200, base:3, g:1.35 },
+  { id:'swarm',     sec:'perm',  name:'Schwarmgedächtnis', max:10,  base:4, step:4 },
+  { id:'capital',   sec:'perm',  name:'Startkapital',      max:5,   costs:[3, 8, 20, 45, 90] },
+  { id:'longnight', sec:'perm',  name:'Lange Nacht',       max:6,   costs:[4, 7, 11, 16, 22, 30] },
+  { id:'robot',     sec:'perm',  name:'Werkstattroboter',  max:1,   costs:[15] },
+];
+const defaultP = () => Object.fromEntries(PERKS.map(p => [p.id, 0]));
+const SKINS = [
+  { id:'ice',     name:'Eisblau',    cost:0,  c:[.55, .88, 1] },
+  { id:'ember',   name:'Glut',       cost:3,  c:[1, .5, .2], trail:'ember' },
+  { id:'toxic',   name:'Gift',       cost:3,  c:[.6, 1, .3] },
+  { id:'magenta', name:'Magenta',    cost:4,  c:[1, .36, .78] },
+  { id:'violet',  name:'Violett',    cost:4,  c:[.62, .5, 1] },
+  { id:'pearl',   name:'Perle',      cost:6,  c:[.95, .93, 1], shimmer:true },
+  { id:'gold',    name:'Gold',       cost:8,  c:[1, .8, .32], trail:'gold' },
+  { id:'rainbow', name:'Regenbogen', cost:15, c:[1, .6, .6], rainbow:true, trail:'rainbow' },
+];
+const SPECIALS = [ { id:'laser', c:[1, .3, .4] }, { id:'seeker', c:[1, .76, .26] }, { id:'bomber', c:[1, .5, .18] } ];
 
 // Materialien der Schichten (Farben 0..1)
 const THEMES = [
@@ -305,14 +390,25 @@ const SECRETS = [
 const G = {
   c: 0, layer: 0, coins: 0, total: 0,
   L: { dmg:0, rad:0, drone:0, ddmg:0, dspd:0, gold:0, combo:0, blast:0, night:0 },
-  stats: { taps:0, removed:0, playSec:0, cubeSec:0, bestCombo:0 },
-  sound: true, intro: false, frenzy: 0
+  stats: { taps:0, removed:0, playSec:0, cubeSec:0, bestCombo:0, golden:0 },
+  sound: true, intro: false, frenzy: 0,
+  cr: 0, crTotal: 0, P: defaultP(), skins: ['ice'], skin: 'ice', robotOn: true, golden: 0
 };
 const cubeN    = c => Math.min(20 + 4*c, 36);
-const hpOf     = s => Math.max(1, Math.round(Math.pow(2.6, s) * Math.pow(6, G.c)));
-const valOf    = s => Math.max(1, Math.round(2 * Math.pow(2.2, s) * Math.pow(6, G.c)));
-const permCoin = () => Math.pow(1.5, G.c);
-const permDmg  = () => Math.pow(1.25, G.c);
+// Härte und Wert hängen von der relativen Tiefe ab: der Kern ist in jedem Würfel "Tiefe 9"
+const dep      = s => S > 1 ? s * 9 / (S - 1) : s;
+const hpOf     = s => Math.max(1, Math.round(Math.pow(2.6, dep(s)) * Math.pow(6, G.c)));
+const valOf    = s => Math.max(1, Math.round(2 * Math.pow(2.2, dep(s)) * Math.pow(6, G.c)));
+const neuCoin  = c => Math.pow(1.5, c);
+const neuDmg   = c => Math.pow(1.4, c);
+const permCoin = () => neuCoin(G.c) * Math.pow(1.15, G.P.kr);
+const permDmg  = () => neuDmg(G.c) * Math.pow(1.15, G.P.km);
+const crystalsFor = c => Math.round(10 * Math.pow(1.3, c));
+const capitalAt = l => l > 0 ? 500 * Math.pow(10, l - 1) : 0;
+const laserInt  = () => 9 - G.P.laser;
+const laserMul  = l => 4 * (1 + 0.5 * (l - 1));
+const bomberInt = () => 50 - 6 * G.P.bomber;
+const goldGap   = l => 67.5 * (1 - 0.1 * l);
 const ms       = l => Math.pow(2, Math.floor(l / 25));
 const dmgAt    = l => (l + 1) * ms(l) * permDmg();
 const tapDmg   = () => dmgAt(G.L.dmg);
@@ -327,7 +423,7 @@ const comboCap = () => capAt(G.L.combo);
 const blastRAt = l => 2.6 + 0.45*l;
 const blastMulAt = l => 6 + 3*l;
 const blastCdAt  = l => Math.max(12, 40 - 3*l);
-const nightAt  = l => 1 + l;
+const nightAt  = l => 1 + l + 2 * G.P.longnight;
 const frenzyMul= () => G.frenzy > 0 ? 4 : 1;
 const droneIncome = () => (G.L.drone > 0 && !finished)
   ? G.L.drone * droneRate() * Math.min(1, droneDmg() / hpOf(G.layer)) * valOf(G.layer) * coinMult() * frenzyMul() : 0;
@@ -698,8 +794,79 @@ function dronePos(i, tt) {
 let beamCursor = 0;
 function beam(idx) {
   const n = Math.min(G.L.drone, 24); if (!n) return;
-  const d = dronePos(beamCursor++ % n, T), p = worldOf(idx);
-  for (let q = 1; q <= 5; q++) { const f = q / 6; addP(d[0] + (p[0]-d[0])*f, d[1] + (p[1]-d[1])*f, d[2] + (p[2]-d[2])*f, 0, 0, 0, .12, .13, .62, .92, 1, 3, 0); }
+  const i = beamCursor++ % n;
+  beamLine(dronePos(i, T), worldOf(idx), skinColor(i, n), 5);
+}
+function beamLine(a, b, c, n, life = .12) {
+  for (let q = 1; q <= n; q++) { const f = q / (n + 1); addP(a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f, a[2] + (b[2]-a[2])*f, 0, 0, 0, life, .13, c[0], c[1], c[2], 3, 0); }
+}
+const skinOf = () => SKINS.find(k => k.id === G.skin) || SKINS[0];
+function skinColor(i, n) {
+  const sk = skinOf();
+  if (sk.rainbow) return hsl((i / Math.max(1, n) + T * 0.08) % 1, 0.85, 0.64);
+  if (sk.shimmer) return hsl((T * 0.06 + i * 0.09) % 1, 0.55, 0.86);
+  return sk.c;
+}
+function droneTrails(dt) {
+  const sk = skinOf(); if (!sk.trail || finished || reduceMotion) return;
+  const nd = Math.min(G.L.drone, 24);
+  for (let i = 0; i < nd; i++) {
+    if (Math.random() > dt * 7) continue;
+    const p = dronePos(i, T), em = sk.trail === 'ember';
+    const c = em ? [1, rnd(.28, .6), .1] : sk.trail === 'gold' ? [1, rnd(.74, .9), rnd(.3, .5)] : skinColor(i, nd);
+    addP(p[0] + rnd(-.15, .15), p[1] + rnd(-.15, .15), p[2] + rnd(-.15, .15), rnd(-.3, .3), em ? rnd(.3, 1) : rnd(-.3, .3), rnd(-.3, .3), rnd(.35, .6), rnd(.1, .16), c[0], c[1], c[2], 3.1, em ? -1.5 : 0);
+  }
+}
+const specials = () => SPECIALS.filter(sd => G.P[sd.id] > 0);
+const specialIndex = id => Math.max(0, specials().findIndex(sd => sd.id === id));
+function specialPos(n, tt) {
+  const a = N - 2 * Math.min(G.layer, S - 1), R = a * 0.72 + 2.4, ph = n * 2.094 + tt * 0.22;
+  return [Math.cos(ph) * R, Math.sin(tt * 0.5 + n * 2) * 1.2 + (n - 1) * 1.6 * Math.min(1, a / 10), Math.sin(ph) * R];
+}
+function randomTarget() {
+  for (let k = 0; k < 8; k++) { const c = act[(Math.random() * actLen) | 0]; if (c !== golden) return c; }
+  return -1;
+}
+// Laserdrohne: brennt eine ganze Reihe über eine Würfelseite
+function fireLaser() {
+  const idx = randomTarget(); if (idx < 0) return;
+  const ci = [ix(idx), jy(idx), kz(idx)], w = worldOf(idx), a = w.map(Math.abs);
+  const ax = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2;
+  const others = [0, 1, 2].filter(x => x !== ax), la = others[(Math.random() * 2) | 0];
+  const nrm = [0, 0, 0]; nrm[ax] = Math.sign(w[ax]) || 1;
+  const lo = G.layer, hi = N - 1 - G.layer;
+  const d = Math.max(tapDmg(), droneDmg()) * laserMul(G.P.laser) * frenzyMul();
+  let gain = 0, first = null;
+  for (let t = lo; t <= hi; t++) {
+    const c = ci.slice(); c[la] = t;
+    const id = c[0] + N * (c[1] + N * c[2]);
+    const p = [c[0] - HALF + nrm[0] * .56, c[1] - HALF + nrm[1] * .56, c[2] - HALF + nrm[2] * .56];
+    if (!first) first = p;
+    addP(p[0], p[1], p[2], 0, 0, 0, .42 + (t - lo) * .014, .34, 1, .32, .42, 3.2, 0);
+    if (id !== golden && alive[id] && shellOf[id] === G.layer) gain += hitVoxel(id, d, 1, 1);
+  }
+  beamLine(specialPos(specialIndex('laser'), T), first, [1, .32, .42], 8, .2);
+  sfx.laser();
+  if (gain > 0) { const sc = screenOf(w); popup(sc[0], sc[1], '+' + fmt(gain)); }
+}
+// Sprengdrohne: wirft eine Ladung mit den Werkstatt-Werten der Sprengladung
+function dropBomb() {
+  const idx = randomTarget(); if (idx < 0) return;
+  const w = worldOf(idx), list = gather(ix(idx), jy(idx), kz(idx), blastRAt(G.L.blast));
+  const d = Math.max(tapDmg(), droneDmg()) * blastMulAt(G.L.blast) * frenzyMul();
+  beamLine(specialPos(specialIndex('bomber'), T), w, [1, .6, .25], 6, .18);
+  let gain = 0;
+  for (const id of list) if (id !== golden) gain += hitVoxel(id, d, 1, 1);
+  for (let q = 0; q < 26; q++) addP(w[0], w[1], w[2], rnd(-8, 8), rnd(-3, 10), rnd(-8, 8), rnd(.25, .5), rnd(.15, .28), 1, rnd(.55, .85), .3, 3, 10);
+  sfx.boom(0.45);
+  if (gain > 0) { const sc = screenOf(w); popup(sc[0], sc[1], '+' + fmt(gain), true); }
+}
+// Goldsucher: holt verpasste goldene Würfelchen
+function seekGolden() {
+  const w = worldOf(golden);
+  beamLine(specialPos(specialIndex('seeker'), T), w, [1, .82, .35], 8, .25);
+  const sc = screenOf(w);
+  collectGolden(sc[0], sc[1], true);
 }
 function updP(dt) {
   for (let i = 0; i < pN;) {
@@ -714,7 +881,14 @@ function buildFX() {
   let n = 0; const F = instF;
   const put = (x, y, z, s, r, g, b, gl_) => { if (n >= FXMAX) return; const o = n++ * 8; F[o] = x; F[o+1] = y; F[o+2] = z; F[o+3] = s; F[o+4] = r; F[o+5] = g; F[o+6] = b; F[o+7] = gl_; };
   const nd = finished ? 0 : Math.min(G.L.drone, 24);
-  for (let i = 0; i < nd; i++) { const p = dronePos(i, T); put(p[0], p[1], p[2], 0.55, .55, .88, 1, 3.0); }
+  for (let i = 0; i < nd; i++) { const p = dronePos(i, T), c = skinColor(i, nd); put(p[0], p[1], p[2], 0.55, c[0], c[1], c[2], 3.0); }
+  if (!finished) specials().forEach((sd, n) => {
+    const p = specialPos(n, T), c = sd.c;
+    put(p[0], p[1], p[2], 1.15, c[0], c[1], c[2], 0);
+    for (const [dx, dz] of [[-.85, -.85], [.85, -.85], [-.85, .85], [.85, .85]]) put(p[0] + dx, p[1] + .32, p[2] + dz, 0.46, c[0] * .5, c[1] * .5, c[2] * .5, 0);
+    const blink = (T * 1.6 + n * .37) % 1 < .2;
+    put(p[0], p[1] + .78, p[2], 0.32, 1, blink ? 1 : .35, blink ? 1 : .3, blink ? 3.2 : 2.6);
+  });
   if (finished) {
     const ang = T * 0.5, ca = Math.cos(ang), sa = Math.sin(ang), lift = 1.6 + Math.sin(T * 1.3) * 0.25, pulse = 0.88 + 0.12 * Math.sin(T * 2.6);
     for (const [x, y, z] of CRYSTAL) {
@@ -779,7 +953,9 @@ const sfx = {
   buy() { if (!AC || !G.sound) return; const t = AC.currentTime; tone(880, .08, 'triangle', .14, t); tone(1320, .12, 'triangle', .12, t + .06); },
   chime() { if (!AC || !G.sound) return; const t = AC.currentTime; [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.55, 'sine', 0.16, t + i * 0.09)); },
   sparkle() { if (!AC || !G.sound) return; const t = AC.currentTime; [1568, 1760, 2093, 2349, 2637, 3136].forEach((f, i) => tone(f, 0.3, 'sine', 0.07, t + i * 0.05)); },
-  boom() { if (!AC || !G.sound) return; const t = AC.currentTime; burst(260, 0.7, 0.55, 0.9, t, 'lowpass'); tone(120, 0.4, 'sine', 0.5, t, 38); },
+  boom(v = 1) { if (!AC || !G.sound) return; const t = AC.currentTime; burst(260, 0.7, 0.55, 0.9 * v, t, 'lowpass'); tone(120, 0.4, 'sine', 0.5 * v, t, 38); },
+  laser() { if (!AC || !G.sound) return; const t = AC.currentTime; tone(1500, 0.26, 'sawtooth', 0.03, t, 260); burst(3200, 1.4, 0.18, 0.1, t); },
+  gem() { if (!AC || !G.sound) return; const t = AC.currentTime; [1318.5, 1760, 2637].forEach((f, i) => tone(f, 0.4, 'sine', 0.09, t + i * 0.06)); },
   finale() { if (!AC || !G.sound) return; const t = AC.currentTime; [392, 523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, 1.4, 'sine', 0.12, t + i * 0.16)); }
 };
 function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
@@ -822,7 +998,7 @@ cv.addEventListener('pointercancel', e => endPtr(e, true));
 cv.addEventListener('wheel', e => { e.preventDefault(); cam.zoom = clamp(cam.zoom * Math.exp(e.deltaY * 0.0012), 0.38, 1.8); cam.idle = 0; }, { passive: false });
 document.addEventListener('gesturestart', e => e.preventDefault());
 
-let combo = 0, lastTapT = -10, blastArmed = false, blastLeft = 0;
+let combo = 0, lastTapT = -10, blastArmed = false, blastLeft = 0, laserCd = 3, bomberCd = 12, robotT = 1;
 function doTap(px, py) {
   if (finished) return;
   if (!G.intro) { G.intro = true; hideHint(); }
@@ -857,19 +1033,27 @@ function detonate(hit, px, py) {
   if (pendingDone) layerComplete(false);
   updBlast();
 }
-function collectGolden(px, py) {
+function collectGolden(px, py, auto) {
   const idx = golden; golden = -1; dirty = true;
-  sfx.sparkle(); vibrate(20);
+  sfx.sparkle(); if (!auto) vibrate(20);
   const p = worldOf(idx);
   for (let q = 0; q < 26; q++) addP(p[0], p[1], p[2], rnd(-6, 6), rnd(-2, 9), rnd(-6, 6), rnd(.4, .8), rnd(.12, .22), 1, .85, .35, 3, 8);
+  G.stats.golden = (G.stats.golden || 0) + 1;
+  let gem = '';
+  if (!auto) {
+    G.cr += 1; G.crTotal += 1; G.golden++;
+    gem = ' und <b class="g">1 Kristall</b>';
+    popup(px, py - 62, '+1 Kristall', 'gem');
+  }
+  const who = auto ? 'Der Goldsucher bringt' : 'Goldfund!';
   if (Math.random() < 0.5) {
-    const g = Math.max(30 * valOf(G.layer) * coinMult(), droneIncome() * 90, 25);
+    const g = Math.max(30 * valOf(G.layer) * coinMult(), droneIncome() * 90, 25) * (1 + 0.25 * G.P.seeker);
     G.coins += g; G.total += g;
     popup(px, py - 30, '+' + fmt(g), true);
-    toast(`Goldfund! <b>+${fmt(g)}</b> Münzen`, 'gold');
+    toast(`${who} <b>+${fmt(g)}</b> Münzen${gem}`, 'gold');
   } else {
     G.frenzy = 15;
-    toast('<b>Goldrausch!</b> 15 Sekunden lang ×4 Schaden und Münzen', 'gold');
+    toast(`<b>Goldrausch!</b> 15 s lang ×4 Schaden und Münzen${gem}`, 'gold');
   }
 }
 function spawnGolden() {
@@ -882,7 +1066,7 @@ function spawnGolden() {
     if (dot > 0.6) break;
   }
   golden = best; goldenLife = 14; dirty = true;
-  toast('Ein <b>goldenes Würfelchen</b> glänzt. Schnell antippen!', 'gold');
+  toast(G.P.seeker ? 'Ein <b>goldenes Würfelchen</b> glänzt. Tippst du es selbst an, gibt es einen Kristall.' : 'Ein <b>goldenes Würfelchen</b> glänzt. Antippen bringt einen Kristall!', 'gold');
 }
 
 /* =========================================================
@@ -898,7 +1082,7 @@ function toast(html, kind, hold = 2.6) {
 let popCount = 0;
 function popup(x, y, text, big) {
   if (popCount > 14) return; popCount++;
-  const el = document.createElement('div'); el.className = 'pop' + (big ? ' big' : ''); el.textContent = text;
+  const el = document.createElement('div'); el.className = 'pop' + (big === true ? ' big' : big ? ' ' + big : ''); el.textContent = text;
   el.style.left = (x + rnd(-10, 10)) + 'px'; el.style.top = (y - 10) + 'px';
   document.body.appendChild(el); setTimeout(() => { el.remove(); popCount--; }, 900);
 }
@@ -906,12 +1090,12 @@ function setLayerAccent() {
   const s = Math.min(G.layer, S - 1), c = themeOf(s).a.map(v => Math.round(Math.min(1, v * 1.08) * 255));
   document.documentElement.style.setProperty('--layer', `rgb(${c[0]},${c[1]},${c[2]})`);
 }
-const els = { coins: $('coins'), rate: $('rate'), layerName: $('layerName'), layerStats: $('layerStats'), layerBar: $('layerBar'), leftCount: $('leftCount'), cubePct: $('cubePct'), cubeBadge: $('cubeBadge'), frenzy: $('frenzy'), combo: $('combo'), shopDot: $('shopDot') };
+const els = { coins: $('coins'), rate: $('rate'), layerName: $('layerName'), layerStats: $('layerStats'), layerBar: $('layerBar'), leftCount: $('leftCount'), cubePct: $('cubePct'), gemCount: $('gemCount'), gemDot: $('gemDot'), frenzy: $('frenzy'), combo: $('combo'), shopDot: $('shopDot') };
 function updHUD() {
   els.coins.textContent = fmt(G.coins);
   const di = droneIncome();
-  els.rate.innerHTML = di > 0 ? `<b>+${fmt(di)}/s</b> durch ${G.L.drone} ${G.L.drone === 1 ? 'Drohne' : 'Drohnen'}` : finished ? 'Der Würfel ist offen' : `+${fmt(valOf(G.layer) * coinMult())} pro Würfelchen`;
-  els.cubeBadge.textContent = `Würfel ${G.c + 1}`;
+  els.rate.innerHTML = di > 0 ? `<b>+${fmt(di)}/s</b> · ${G.L.drone} ${G.L.drone === 1 ? 'Drohne' : 'Drohnen'}` : finished ? 'Der Würfel ist offen' : `+${fmt(valOf(G.layer) * coinMult())} pro Würfelchen`;
+  els.gemCount.textContent = fmt(G.cr);
   if (finished) {
     els.layerName.innerHTML = '<b>Alle Schichten abgetragen</b>';
     els.layerStats.textContent = `${N}×${N}×${N}`;
@@ -925,11 +1109,12 @@ function updHUD() {
     els.leftCount.textContent = `${actLen.toLocaleString('de-DE')} Würfelchen übrig`;
   }
   const pct = 100 * cubeRemoved / N3;
-  els.cubePct.textContent = (pct < 10 ? pct.toLocaleString('de-DE', { maximumFractionDigits: 1 }) : Math.floor(pct)) + ' % freigelegt';
+  els.cubePct.textContent = `Würfel ${G.c + 1} · ` + (pct < 10 ? pct.toLocaleString('de-DE', { maximumFractionDigits: 1 }) : Math.floor(pct)) + ' % freigelegt';
   els.frenzy.hidden = !(G.frenzy > 0); if (G.frenzy > 0) els.frenzy.textContent = `Goldrausch ${Math.ceil(G.frenzy)} s`;
   const showCombo = combo >= 3 && T - lastTapT < 0.9;
   els.combo.hidden = !showCombo; if (showCombo) els.combo.innerHTML = `Combo ${combo} <b>×${fmtX(1 + 0.02 * combo)}</b>`;
   els.shopDot.hidden = !UPS.some(u => unlocked(u) && costOf(u, G.L[u.id]) <= G.coins);
+  els.gemDot.hidden = !forgeAffordable();
 }
 
 /* Werkstatt */
@@ -966,7 +1151,7 @@ function maxedText(u) {
   }
 }
 function renderShop() {
-  $('shopList').innerHTML = UPS.map(u => `
+  $('shopList').innerHTML = `<div class="robot" id="robotRow" hidden>${svg('robot')}<span>Werkstattroboter<br><small id="robotTxt"></small></span><button class="switch" id="robotSw" aria-pressed="true" aria-label="Werkstattroboter ein- oder ausschalten"></button></div>` + UPS.map(u => `
     <div class="up" id="up-${u.id}">
       <span class="up-ico">${svg(u.id)}</span>
       <div style="min-width:0"><div class="up-name">${u.name} <small id="lv-${u.id}"></small></div><div class="up-eff" id="ef-${u.id}"></div></div>
@@ -975,6 +1160,8 @@ function renderShop() {
   updShop();
 }
 function updShop() {
+  const rr = $('robotRow');
+  if (rr) { rr.hidden = !G.P.robot; $('robotSw').setAttribute('aria-pressed', String(G.robotOn)); $('robotTxt').textContent = G.robotOn ? 'Kauft automatisch das günstigste Upgrade' : 'Pausiert, du kaufst selbst'; }
   for (const u of UPS) {
     const row = $('up-' + u.id); if (!row) continue;
     const l = G.L[u.id], ok = unlocked(u);
@@ -989,25 +1176,147 @@ function updShop() {
     btn.innerHTML = `${svg('coin')}${fmt(cost)}${n > 1 || buyAmt !== 1 ? ` <small>×${n}</small>` : ''}`;
   }
 }
+function applyBuy(u, n, cost) {
+  G.coins -= cost; G.L[u.id] += n;
+  if (u.id === 'drone' && G.L.drone === n) toast('Die erste <b>Bohrdrohne</b> fliegt. Sie arbeitet auch, wenn du weg bist.');
+  if (u.id === 'blast' && G.L.blast === n) { blastLeft = 0; toast('<b>Sprengladung</b> bereit: unten rechts antippen, dann auf den Würfel.'); }
+}
 $('shopList').addEventListener('click', e => {
+  if (e.target.closest('#robotSw')) { G.robotOn = !G.robotOn; updShop(); save(); return; }
   const b = e.target.closest('.buy'); if (!b || b.disabled) return;
   const u = UPS.find(x => x.id === b.dataset.id); const { n, cost } = bulk(u);
   if (!n || cost > G.coins) return;
-  G.coins -= cost; G.L[u.id] += n; unlockAudio(); sfx.buy();
-  if (u.id === 'drone' && G.L.drone === n) toast('Die erste <b>Bohrdrohne</b> fliegt. Sie arbeitet auch, wenn du weg bist.');
-  if (u.id === 'blast' && G.L.blast === n) { blastLeft = 0; toast('<b>Sprengladung</b> bereit: unten rechts antippen, dann auf den Würfel.'); }
+  applyBuy(u, n, cost); unlockAudio(); sfx.buy();
   updShop(); updHUD(); updBlast(); save();
 });
+// Werkstattroboter: kauft das jeweils günstigste Upgrade
+function robotTick() {
+  let bought = 0;
+  for (let k = 0; k < 30; k++) {
+    let best = null, bc = Infinity;
+    for (const u of UPS) { if (!unlocked(u)) continue; const c = costOf(u, G.L[u.id]); if (c < bc) { bc = c; best = u; } }
+    if (!best || bc > G.coins) break;
+    applyBuy(best, 1, bc); bought++;
+  }
+  if (bought) { if ($('shop').classList.contains('open')) updShop(); updBlast(); }
+}
+
+/* Kristallschmiede */
+function pcost(p, l) {
+  if (l >= p.max) return Infinity;
+  if (p.costs) return p.costs[l];
+  if (p.step) return p.base + p.step * l;
+  return Math.ceil(p.base * Math.pow(p.g, l));
+}
+function perkEff(p, a, b) {
+  switch (p.id) {
+    case 'laser':  return a === 0 ? 'Brennt alle 8 s eine ganze Reihe Würfelchen weg' : `Alle ${9 - a} → ${9 - b} s, Schaden ×${fmtX(laserMul(a))} → ×${fmtX(laserMul(b))}`;
+    case 'seeker': return a === 0 ? 'Holt goldene Würfelchen, die du verpasst, und lässt sie öfter erscheinen' : `Gold etwa alle ${Math.round(goldGap(a))} → ${Math.round(goldGap(b))} s, Fund +${25 * a} → +${25 * b} %`;
+    case 'bomber': return a === 0 ? 'Wirft alle 44 s eine Sprengladung, auch ohne Werkstatt-Kauf' : `Wirft alle ${50 - 6 * a} → ${50 - 6 * b} s eine Ladung`;
+    case 'km':     return `Schaden ×${fmtX(Math.pow(1.15, a))} → ×${fmtX(Math.pow(1.15, b))} für Tipps und alle Drohnen`;
+    case 'kr':     return `Münzen ×${fmtX(Math.pow(1.15, a))} → ×${fmtX(Math.pow(1.15, b))}`;
+    case 'swarm':  return a === 0 ? 'Jeder neue Würfel startet mit 3 Drohnen' : `Jeder Würfel startet mit ${3 * a} → ${3 * b} Drohnen`;
+    case 'capital':return a === 0 ? `Jeder neue Würfel startet mit ${fmt(capitalAt(1))} Münzen` : `Jeder Würfel startet mit ${fmt(capitalAt(a))} → ${fmt(capitalAt(b))} Münzen`;
+    case 'longnight': return a === 0 ? 'Drohnen arbeiten offline 2 Std länger' : `Drohnen arbeiten offline +${2 * a} → +${2 * b} Std länger`;
+    case 'robot':  return 'Kauft in der Werkstatt automatisch das günstigste Upgrade';
+  }
+}
+function perkMaxed(p) {
+  const l = G.P[p.id];
+  switch (p.id) {
+    case 'laser':  return `Alle ${9 - l} s, Schaden ×${fmtX(laserMul(l))}`;
+    case 'seeker': return `Gold etwa alle ${Math.round(goldGap(l))} s, Fund +${25 * l} %`;
+    case 'bomber': return `Wirft alle ${50 - 6 * l} s eine Ladung`;
+    case 'swarm':  return `Jeder Würfel startet mit ${3 * l} Drohnen`;
+    case 'capital':return `Jeder Würfel startet mit ${fmt(capitalAt(l))} Münzen`;
+    case 'longnight': return `Drohnen arbeiten offline +${2 * l} Std länger`;
+    case 'robot':  return 'Ein- und ausschalten oben in der Werkstatt';
+    default: return 'Höchste Stufe';
+  }
+}
+function forgeAffordable() {
+  return PERKS.some(p => pcost(p, G.P[p.id]) <= G.cr) || SKINS.some(k => !G.skins.includes(k.id) && k.cost <= G.cr);
+}
+function skinSwatch(k) {
+  const rgb = f => `rgb(${k.c.map(v => Math.round(Math.min(1, v * f) * 255)).join(',')})`;
+  const top = k.rainbow ? 'url(#rbT)' : rgb(1.08), left = k.rainbow ? 'url(#rbL)' : rgb(.85), right = k.rainbow ? 'url(#rbR)' : rgb(.6);
+  const defs = k.rainbow ? '<defs><linearGradient id="rbT" x1="0" x2="1"><stop offset="0" stop-color="#ffd25d"/><stop offset="1" stop-color="#5dffa1"/></linearGradient><linearGradient id="rbL" y1="0" y2="1" x1="0" x2="0"><stop offset="0" stop-color="#ff5d7a"/><stop offset="1" stop-color="#ff9a4d"/></linearGradient><linearGradient id="rbR" y1="0" y2="1" x1="0" x2="0"><stop offset="0" stop-color="#4dc2ff"/><stop offset="1" stop-color="#8a6dff"/></linearGradient></defs>' : '';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${defs}<path d="M12 12L3.5 7.3v9.4L12 21.5z" fill="${left}"/><path d="M12 12l8.5-4.7v9.4L12 21.5z" fill="${right}"/><path d="M12 12L3.5 7.3 12 2.5l8.5 4.8z" fill="${top}"/></svg>`;
+}
+function renderForge() {
+  const sec = (key, label) => `<div class="section-label">${label}</div>` + PERKS.filter(p => p.sec === key).map(p => `
+    <div class="up gemrow" id="pk-${p.id}">
+      <span class="up-ico">${svg(p.id)}</span>
+      <div style="min-width:0"><div class="up-name">${p.name} <small id="pl-${p.id}"></small></div><div class="up-eff" id="pe-${p.id}"></div></div>
+      <button class="buy gem" id="pb-${p.id}" data-perk="${p.id}"></button>
+    </div>`).join('');
+  $('forgeList').innerHTML =
+    `<p class="muted-note">Kernkristalle gibt es für jeden geöffneten Würfel und für jedes goldene Würfelchen, das du selbst antippst. Alles hier bleibt für immer.</p>` +
+    sec('drone', 'Spezialdrohnen') + sec('perm', 'Dauerhafte Boni') +
+    `<div class="section-label">Drohnenfarbe</div><div class="skins">${SKINS.map(k => `<button class="skin" id="sk-${k.id}" data-skin="${k.id}">${skinSwatch(k)}<span>${k.name}</span><small id="sc-${k.id}"></small></button>`).join('')}</div>`;
+  updForge();
+}
+function updForge() {
+  $('forgeHave').innerHTML = `${svg('gemFill')}${fmt(G.cr)}`;
+  if (!$('pb-laser')) return;
+  for (const p of PERKS) {
+    const l = G.P[p.id], c = pcost(p, l), btn = $('pb-' + p.id);
+    $('pl-' + p.id).textContent = l > 0 && p.max > 1 ? `Stufe ${l}` : '';
+    if (!isFinite(c)) {
+      $('pe-' + p.id).textContent = perkMaxed(p);
+      btn.className = 'buy owned'; btn.disabled = true; btn.textContent = p.max === 1 ? 'Gekauft' : 'Max';
+      continue;
+    }
+    $('pe-' + p.id).textContent = perkEff(p, l, l + 1);
+    btn.className = 'buy gem'; btn.disabled = c > G.cr; btn.innerHTML = `${svg('gem')}${fmt(c)}`;
+  }
+  for (const k of SKINS) {
+    const own = G.skins.includes(k.id), on = G.skin === k.id, el = $('sk-' + k.id);
+    el.classList.toggle('on', on);
+    el.disabled = !own && k.cost > G.cr;
+    el.setAttribute('aria-pressed', String(on));
+    $('sc-' + k.id).innerHTML = on ? 'Aktiv' : own ? 'Wählen' : `${svg('gem')}${k.cost}`;
+  }
+}
+function buyPerk(p) {
+  const l = G.P[p.id], c = pcost(p, l); if (!isFinite(c) || c > G.cr) return;
+  G.cr -= c; G.P[p.id] = l + 1; unlockAudio(); sfx.gem();
+  switch (p.id) {
+    case 'laser':  if (l === 0) { laserCd = 1.5; toast('Die <b>Laserdrohne</b> fliegt jetzt mit.', 'gem'); } break;
+    case 'seeker': if (l === 0) toast('Der <b>Goldsucher</b> hält Ausschau nach goldenen Würfelchen.', 'gem'); goldenTimer = Math.min(goldenTimer, goldGap(G.P.seeker)); break;
+    case 'bomber': if (l === 0) { bomberCd = 4; toast('Die <b>Sprengdrohne</b> fliegt jetzt mit.', 'gem'); } break;
+    case 'swarm':  if (!finished) { G.L.drone += 3; toast('<b>+3 Drohnen</b>, ab jetzt bei jedem neuen Würfel.', 'gem'); } break;
+    case 'capital':if (!finished) { const g = capitalAt(G.P.capital); G.coins += g; toast(`<b>+${fmt(g)}</b> Münzen, ab jetzt bei jedem neuen Würfel.`, 'gem'); } break;
+    case 'robot':  G.robotOn = true; robotT = 0.6; toast('Der <b>Werkstattroboter</b> kauft jetzt für dich ein. Ausschalten kannst du ihn in der Werkstatt.', 'gem', 3.4); break;
+  }
+  updForge(); updHUD(); updShop(); save();
+}
+function pickSkin(k) {
+  if (!G.skins.includes(k.id)) {
+    if (k.cost > G.cr) return;
+    G.cr -= k.cost; G.skins.push(k.id); unlockAudio(); sfx.gem();
+    toast(`Drohnenfarbe <b>${k.name}</b> freigeschaltet.`, 'gem');
+  }
+  G.skin = k.id; updForge(); updHUD(); save();
+}
+$('forgeList').addEventListener('click', e => {
+  const pb = e.target.closest('[data-perk]'), sb = e.target.closest('[data-skin]');
+  if (pb && !pb.disabled) buyPerk(PERKS.find(p => p.id === pb.dataset.perk));
+  else if (sb && !sb.disabled) pickSkin(SKINS.find(k => k.id === sb.dataset.skin));
+});
+function openForge() { renderForge(); openSheet('forge'); }
+$('gemBtn').addEventListener('click', () => { unlockAudio(); if ($('forge').classList.contains('open')) closeSheets(); else openForge(); });
+$('forgeClose').addEventListener('click', () => closeSheets());
 document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
   buyAmt = b.dataset.amt === 'max' ? 'max' : +b.dataset.amt;
   document.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b)); updShop();
 }));
 function openSheet(id) { closeSheets(); $(id).classList.add('open'); }
-function closeSheets() { $('shop').classList.remove('open'); $('menu').classList.remove('open'); }
+function closeSheets() { for (const id of ['shop', 'menu', 'forge']) $(id).classList.remove('open'); }
 $('shopBtn').addEventListener('click', () => { unlockAudio(); if ($('shop').classList.contains('open')) closeSheets(); else { updShop(); openSheet('shop'); } });
 $('shopClose').addEventListener('click', closeSheets);
 $('menuClose').addEventListener('click', closeSheets);
-cv.addEventListener('pointerdown', () => { if ($('menu').classList.contains('open')) closeSheets(); });
+cv.addEventListener('pointerdown', () => { if ($('menu').classList.contains('open') || $('forge').classList.contains('open')) closeSheets(); });
 
 /* Sprengladung */
 function updBlast() {
@@ -1036,17 +1345,20 @@ function renderMenu() {
   const st = G.stats;
   $('menuBody').innerHTML = `
     <dl class="stats">
-      <dt>Aktueller Würfel</dt><dd>${N}×${N}×${N}</dd>
+      <dt>Aktueller Würfel</dt><dd>Nr. ${G.c + 1} · ${N}×${N}×${N}</dd>
       <dt>Würfelchen abgetragen</dt><dd>${fmt(st.removed)}</dd>
       <dt>Tipps</dt><dd>${fmt(st.taps)}</dd>
       <dt>Beste Combo</dt><dd>${st.bestCombo}</dd>
       <dt>Münzen verdient</dt><dd>${fmt(G.total)}</dd>
       <dt>Spielzeit</dt><dd>${fmtTime(st.playSec)}</dd>
       <dt>Geöffnete Würfel</dt><dd>${G.c}</dd>
-      <dt>Neugier-Bonus</dt><dd>Münzen ×${fmtX(permCoin())} · Schaden ×${fmtX(permDmg())}</dd>
+      <dt>Goldene Würfelchen</dt><dd>${fmt(st.golden || 0)}</dd>
+      <dt>Kernkristalle verdient</dt><dd>${fmt(G.crTotal)}</dd>
+      <dt>Münzen-Bonus</dt><dd>×${fmtX(permCoin())}</dd>
+      <dt>Schaden-Bonus</dt><dd>×${fmtX(permDmg())}</dd>
     </dl>
     <div class="section-label">So läuft’s</div>
-    <p class="muted-note">Jede Schicht muss ganz weg, bevor die nächste freiliegt. Tiefere Schichten sind härter und mehr wert. Goldene Würfelchen bringen Münzen oder einen Goldrausch. Drohnen arbeiten weiter, wenn du das Spiel schließt, so lange wie deine Nachtschicht reicht. Der Spielstand wird auf diesem Gerät gespeichert.</p>
+    <p class="muted-note">Jede Schicht muss ganz weg, bevor die nächste freiliegt. Tiefere Schichten sind härter und mehr wert. Goldene Würfelchen bringen Münzen oder einen Goldrausch. Drohnen arbeiten weiter, wenn du das Spiel schließt, so lange wie deine Nachtschicht reicht. Jeder geöffnete Würfel bringt Kernkristalle für die Kristallschmiede, dort schaltest du Dinge dauerhaft frei. Der Spielstand wird auf diesem Gerät gespeichert.</p>
     <div class="section-label">Spielstand</div>
     ${confirmReset
       ? `<div class="confirm-row"><button class="yes" id="resetYes">Ja, alles löschen</button><button class="no" id="resetNo">Abbrechen</button></div>`
@@ -1059,12 +1371,14 @@ function renderMenu() {
 $('menuBtn').addEventListener('click', () => { if ($('menu').classList.contains('open')) closeSheets(); else { confirmReset = false; renderMenu(); openSheet('menu'); } });
 
 /* Modals */
+const modalQ = [];
 function modal(html, btnText, onOk, low) {
+  if (document.querySelector('.veil')) { modalQ.push([html, btnText, onOk, low]); return; }
   const v = document.createElement('div'); v.className = 'veil' + (low ? ' low' : '');
   v.innerHTML = `<div class="card" role="dialog" aria-modal="true">${html}<button class="primary" id="modalOk">${btnText}</button></div>`;
   document.body.appendChild(v);
   const ok = v.querySelector('#modalOk');
-  ok.addEventListener('click', () => { unlockAudio(); v.remove(); onOk && onOk(); });
+  ok.addEventListener('click', () => { unlockAudio(); v.remove(); onOk && onOk(); const nx = modalQ.shift(); if (nx) setTimeout(() => modal(...nx), 250); });
 }
 function hideHint() { const h = $('hint'); h.style.opacity = 0; setTimeout(() => { h.hidden = true; }, 500); }
 
@@ -1079,28 +1393,33 @@ function reachFinale(quiet) {
 function showFinale() {
   if (finaleShown) return; finaleShown = true;
   const secret = SECRETS[Math.min(G.c, SECRETS.length - 1)];
-  const nc = G.c + 1;
+  const nc = G.c + 1, reward = crystalsFor(G.c);
   modal(`
     <div class="eyebrow">Würfel ${G.c + 1} · ${N}×${N}×${N} · ${fmt(N3)} Würfelchen</div>
     <h2>Im Würfel war …</h2>
     <p>${secret}</p>
-    <p class="meta">Gebraucht: ${fmtTime(G.stats.cubeSec)}. Der nächste Würfel ist größer und härter, dafür nimmst du deine Neugier mit: Münzen ×${fmtX(Math.pow(1.5, nc))} und Schaden ×${fmtX(Math.pow(1.25, nc))}, dauerhaft. Münzen und Werkstatt starten neu.</p>`,
-    'Nächsten Würfel öffnen', () => { finaleShown = false; prestige(); }, true);
+    <div class="reward"><span class="gem-big">${svg('gemFill')}+${reward}</span><span>Kernkristalle für die Kristallschmiede${G.golden ? `<br><small>dazu ${G.golden} aus goldenen Würfelchen unterwegs</small>` : ''}</span></div>
+    <p class="meta">Gebraucht: ${fmtTime(G.stats.cubeSec)}. Der nächste Würfel ist größer und härter. Deine Neugier bleibt: Münzen ×${fmtX(neuCoin(nc))} und Schaden ×${fmtX(neuDmg(nc))}. Münzen und Werkstatt starten neu, Kristalle und alles aus der Kristallschmiede bleiben.</p>`,
+    'Kristalle nehmen, weiter', () => { finaleShown = false; prestige(reward); }, true);
 }
-function prestige() {
-  G.c++; G.coins = 0; G.layer = 0; G.frenzy = 0; G.stats.cubeSec = 0;
+function prestige(reward) {
+  G.cr += reward; G.crTotal += reward;
+  G.c++; G.coins = capitalAt(G.P.capital); G.layer = 0; G.frenzy = 0; G.stats.cubeSec = 0; G.golden = 0;
   for (const k in G.L) G.L[k] = 0;
-  blastLeft = 0; blastArmed = false; combo = 0; pN = 0;
+  G.L.drone = 3 * G.P.swarm;
+  blastLeft = 0; blastArmed = false; combo = 0; pN = 0; laserCd = 3; bomberCd = 10; goldenTimer = 40;
   buildCube(G.c); activateShell(0);
   fitTarget = fitFor(N); cam.fit = fitTarget * 1.6;
   renderShop(); updBlast(); updHUD(); save();
   toast(`Würfel ${G.c + 1}: <b>${N}×${N}×${N}</b>. Viel Neugier!`, null, 3.2);
   sfx.chime();
+  setTimeout(openForge, 900);
 }
 function newGame() {
   G.c = 0; G.layer = 0; G.coins = 0; G.total = 0; G.frenzy = 0;
   for (const k in G.L) G.L[k] = 0;
-  G.stats = { taps: 0, removed: 0, playSec: 0, cubeSec: 0, bestCombo: 0 };
+  G.stats = { taps: 0, removed: 0, playSec: 0, cubeSec: 0, bestCombo: 0, golden: 0 };
+  G.cr = 0; G.crTotal = 0; G.P = defaultP(); G.skins = ['ice']; G.skin = 'ice'; G.robotOn = true; G.golden = 0;
   buildCube(0); activateShell(0);
   fitTarget = fitFor(N); cam.fit = fitTarget * 1.5;
 }
@@ -1180,15 +1499,21 @@ const store = {
 function snapshot() {
   const ids = Array.from(act.subarray(0, actLen));
   return { v: 1, c: G.c, layer: G.layer, coins: G.coins, total: G.total, L: { ...G.L }, stats: { ...G.stats }, sound: G.sound, intro: G.intro,
+    cr: G.cr, crTotal: G.crTotal, P: { ...G.P }, skins: G.skins.slice(), skin: G.skin, robotOn: G.robotOn, golden: G.golden,
     blastLeft, fin: finished, act: ids, hp: ids.map(i => +hp[i].toPrecision(6)), last: Date.now() };
 }
-let booted = false;
+let booted = false, retroGrant = 0;
 function save() { if (booted) store.set(snapshot()); }
 function restore(s) {
   G.c = s.c | 0; G.layer = s.layer | 0; G.coins = +s.coins || 0; G.total = +s.total || 0;
   for (const k in G.L) G.L[k] = (s.L && s.L[k]) | 0;
-  G.stats = Object.assign({ taps: 0, removed: 0, playSec: 0, cubeSec: 0, bestCombo: 0 }, s.stats || {});
+  G.stats = Object.assign({ taps: 0, removed: 0, playSec: 0, cubeSec: 0, bestCombo: 0, golden: 0 }, s.stats || {});
   G.sound = s.sound !== false; G.intro = !!s.intro; blastLeft = +s.blastLeft || 0;
+  G.P = defaultP(); if (s.P) for (const k in G.P) G.P[k] = Math.min(PERKS.find(p => p.id === k).max, s.P[k] | 0);
+  G.cr = +s.cr || 0; G.crTotal = +s.crTotal || 0; G.golden = s.golden | 0; G.robotOn = s.robotOn !== false;
+  G.skins = ['ice'].concat((Array.isArray(s.skins) ? s.skins : []).filter(id => id !== 'ice' && SKINS.some(k => k.id === id)));
+  G.skin = G.skins.includes(s.skin) ? s.skin : 'ice';
+  if (!s.P && G.c > 0) { let r = 0; for (let i = 0; i < G.c; i++) r += crystalsFor(i); G.cr += r; G.crTotal += r; retroGrant = r; }
   buildCube(G.c);
   if (s.fin || G.layer >= S) {
     G.layer = S; alive.fill(0); actLen = 0; cubeRemoved = N3; finished = true; fitTarget = 15; setLayerAccent();
@@ -1236,12 +1561,17 @@ function update(dt) {
       if (goldenLife <= 0 || !alive[golden]) { golden = -1; dirty = true; }
       else if (Math.random() < dt * 10) { const p = worldOf(golden), n = normalOf(golden); addP(p[0] + n[0]*.6 + rnd(-.45,.45), p[1] + n[1]*.6 + rnd(-.45,.45), p[2] + n[2]*.6 + rnd(-.45,.45), n[0]*1.6, n[1]*1.6 + 1, n[2]*1.6, .55, .12, 1, .86, .4, 3.2, 0); }
     }
-    else { goldenTimer -= dt; if (goldenTimer <= 0) { goldenTimer = rnd(45, 90); spawnGolden(); } }
+    else { goldenTimer -= dt; if (goldenTimer <= 0) { goldenTimer = rnd(45, 90) * (1 - 0.1 * G.P.seeker); spawnGolden(); } }
+    if (golden >= 0 && G.P.seeker > 0 && goldenLife < 8) seekGolden();
+    if (actLen > 0 && G.P.laser > 0) { laserCd -= dt; if (laserCd <= 0) { laserCd = laserInt(); fireLaser(); } }
+    if (actLen > 0 && G.P.bomber > 0) { bomberCd -= dt; if (bomberCd <= 0) { bomberCd = bomberInt(); dropBomb(); } }
+    if (G.P.robot && G.robotOn) { robotT -= dt; if (robotT <= 0) { robotT = 0.5; robotTick(); } }
     if (!highlightWarned && actLen > 0 && actLen <= highlightThreshold()) {
       highlightWarned = true; dirty = true;
       toast(`Nur noch <b>${actLen}</b> Würfelchen in dieser Schicht. Sie leuchten jetzt.`);
     }
   }
+  droneTrails(dt);
   updP(dt);
   // Kamera
   cam.fit += (fitTarget - cam.fit) * (1 - Math.exp(-dt * 2.2));
@@ -1263,7 +1593,7 @@ function frame(ts) {
   render();
   hudT += dt; shopT += dt; saveT += dt;
   if (hudT > 0.1) { hudT = 0; updHUD(); if (blastLeft > 0) updBlast(); }
-  if (shopT > 0.25) { shopT = 0; if ($('shop').classList.contains('open')) updShop(); }
+  if (shopT > 0.25) { shopT = 0; if ($('shop').classList.contains('open')) updShop(); if ($('forge').classList.contains('open')) updForge(); }
   if (saveT > 15) { saveT = 0; save(); }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
@@ -1288,10 +1618,18 @@ async function start(hot) {
     const away = (Date.now() - s.last) / 1000;
     if (away > 5) catchUp(away, away >= 60);
   }
-  if (finished && !document.querySelector('.veil')) setTimeout(showFinale, 800);
+  if (retroGrant > 0) {
+    modal(`
+      <div class="eyebrow gem">Neu</div>
+      <h2>Die Kristallschmiede</h2>
+      <p>Jeder geöffnete Würfel bringt jetzt Kernkristalle, jedes goldene Würfelchen, das du selbst antippst, einen weiteren. Damit schaltest du dauerhaft Spezialdrohnen, Boni und Drohnenfarben frei.</p>
+      <div class="reward"><span class="gem-big">${svg('gemFill')}+${retroGrant}</span><span>nachträglich für ${G.c === 1 ? 'deinen ersten Würfel' : `deine ${G.c} geöffneten Würfel`}</span></div>`,
+      'Kristallschmiede öffnen', openForge);
+  }
+  if (finished) setTimeout(showFinale, 800);
   save();
   requestAnimationFrame(frame);
-  if (location.hash === '#test') window.__nw = { G, doTap, spawnGolden, renderMenu, openSheet, catchUp, get N() { return N; }, get actLen() { return actLen; }, get finished() { return finished; }, layerComplete, updShop, updHUD, cam, rawPick: pick };
+  if (location.hash === '#test') window.__nw = { G, doTap, spawnGolden, renderMenu, openSheet, openForge, fireLaser, dropBomb, prestige, showFinale, catchUp, get N() { return N; }, get actLen() { return actLen; }, get finished() { return finished; }, layerComplete, updShop, updHUD, cam, rawPick: pick };
 }
 try { window.claude?.hot?.snapshot?.(() => ({ save: snapshot() })); } catch (e) {}
 const hotApi = window.claude?.hot;

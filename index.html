@@ -2,13 +2,11 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Neugierwürfel">
 <title>Neugierwürfel</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#0d0f21">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -145,6 +143,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 .skin > svg{width:34px;height:34px}
 .skin small{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
 .skin small svg{width:11px;height:11px}
+#sk-ember > svg{filter:drop-shadow(0 0 6px rgba(255,128,48,.75))}
 .skin.on{border-color:var(--crystal);box-shadow:inset 0 0 0 1px var(--crystal)}
 .skin.on small{color:var(--crystal-hi)}
 .skin:disabled{opacity:.45;cursor:default}
@@ -210,6 +209,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 </style>
 </head>
 <body>
+<!--BODY-->
 <canvas id="stage" aria-label="Der Würfel. Tippen klopft Würfelchen ab, Ziehen dreht, zwei Finger zoomen."></canvas>
 
 <header class="hud">
@@ -343,13 +343,13 @@ const PERKS = [
 const defaultP = () => Object.fromEntries(PERKS.map(p => [p.id, 0]));
 const SKINS = [
   { id:'ice',     name:'Eisblau',    cost:0,  c:[.55, .88, 1] },
-  { id:'ember',   name:'Glut',       cost:3,  c:[1, .5, .2], trail:'ember' },
-  { id:'toxic',   name:'Gift',       cost:3,  c:[.6, 1, .3] },
-  { id:'magenta', name:'Magenta',    cost:4,  c:[1, .36, .78] },
-  { id:'violet',  name:'Violett',    cost:4,  c:[.62, .5, 1] },
-  { id:'pearl',   name:'Perle',      cost:6,  c:[.95, .93, 1], shimmer:true },
-  { id:'gold',    name:'Gold',       cost:8,  c:[1, .8, .32], trail:'gold' },
-  { id:'rainbow', name:'Regenbogen', cost:15, c:[1, .6, .6], rainbow:true, trail:'rainbow' },
+  { id:'ember',   name:'Glut',       cost:6,  c:[1, .5, .2], ember:true, trail:'ember' },
+  { id:'toxic',   name:'Gift',       cost:6,  c:[.6, 1, .3] },
+  { id:'magenta', name:'Magenta',    cost:8,  c:[1, .36, .78] },
+  { id:'violet',  name:'Violett',    cost:8,  c:[.62, .5, 1] },
+  { id:'pearl',   name:'Perle',      cost:12, c:[.95, .93, 1], shimmer:true },
+  { id:'gold',    name:'Gold',       cost:15, c:[1, .8, .32], trail:'gold' },
+  { id:'rainbow', name:'Regenbogen', cost:20, c:[1, .6, .6], rainbow:true, trail:'rainbow' },
 ];
 const SPECIALS = [ { id:'laser', c:[1, .3, .4] }, { id:'seeker', c:[1, .76, .26] }, { id:'bomber', c:[1, .5, .18] } ];
 
@@ -407,7 +407,8 @@ const crystalsFor = c => Math.round(10 * Math.pow(1.3, c));
 const capitalAt = l => l > 0 ? 500 * Math.pow(10, l - 1) : 0;
 const laserInt  = () => 9 - G.P.laser;
 const laserMul  = l => 4 * (1 + 0.5 * (l - 1));
-const bomberInt = () => 50 - 6 * G.P.bomber;
+const bomberSec = l => 600 - 90 * (l - 1);
+const bomberInt = () => bomberSec(G.P.bomber);
 const goldGap   = l => 67.5 * (1 - 0.1 * l);
 const ms       = l => Math.pow(2, Math.floor(l / 25));
 const dmgAt    = l => (l + 1) * ms(l) * permDmg();
@@ -422,7 +423,7 @@ const capAt    = l => 10 + 10*l;
 const comboCap = () => capAt(G.L.combo);
 const blastRAt = l => 2.6 + 0.45*l;
 const blastMulAt = l => 6 + 3*l;
-const blastCdAt  = l => Math.max(12, 40 - 3*l);
+const blastCdAt  = l => 600; // 10 Minuten, Upgrades verbessern Radius und Schaden
 const nightAt  = l => 1 + l + 2 * G.P.longnight;
 const frenzyMul= () => G.frenzy > 0 ? 4 : 1;
 const droneIncome = () => (G.L.drone > 0 && !finished)
@@ -444,6 +445,7 @@ function fmt(n) {
   return Math.floor(n).toLocaleString('de-DE');
 }
 const fmtX = x => x.toLocaleString('de-DE', { maximumFractionDigits: x < 10 ? 2 : 1 });
+const fmtCd = sec => { sec = Math.ceil(sec); const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}:${String(r).padStart(2, '0')} Min` : `${r} Sek`; };
 function fmtTime(sec) {
   sec = Math.max(0, Math.round(sec));
   const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
@@ -805,16 +807,21 @@ function skinColor(i, n) {
   const sk = skinOf();
   if (sk.rainbow) return hsl((i / Math.max(1, n) + T * 0.08) % 1, 0.85, 0.64);
   if (sk.shimmer) return hsl((T * 0.06 + i * 0.09) % 1, 0.55, 0.86);
+  if (sk.ember) { const f = emberF(i); return [1, .44 + .16 * f, .13 + .08 * f]; }
   return sk.c;
 }
+// Glut: unruhiges Glimmen je Drohne (0..1)
+const emberF = i => reduceMotion ? .6 : clamp(.5 + .32 * Math.sin(T * 6.3 + i * 1.9) + .18 * Math.sin(T * 13.7 + i * 4.1), 0, 1);
+const droneGlow = i => skinOf().ember ? 3.18 + .3 * emberF(i) : 3.0;
 function droneTrails(dt) {
   const sk = skinOf(); if (!sk.trail || finished || reduceMotion) return;
   const nd = Math.min(G.L.drone, 24);
   for (let i = 0; i < nd; i++) {
-    if (Math.random() > dt * 7) continue;
-    const p = dronePos(i, T), em = sk.trail === 'ember';
-    const c = em ? [1, rnd(.28, .6), .1] : sk.trail === 'gold' ? [1, rnd(.74, .9), rnd(.3, .5)] : skinColor(i, nd);
-    addP(p[0] + rnd(-.15, .15), p[1] + rnd(-.15, .15), p[2] + rnd(-.15, .15), rnd(-.3, .3), em ? rnd(.3, 1) : rnd(-.3, .3), rnd(-.3, .3), rnd(.35, .6), rnd(.1, .16), c[0], c[1], c[2], 3.1, em ? -1.5 : 0);
+    const em = sk.trail === 'ember';
+    if (Math.random() > dt * (em ? 15 : 7)) continue;
+    const p = dronePos(i, T);
+    const c = em ? [1, rnd(.32, .72), rnd(.06, .16)] : sk.trail === 'gold' ? [1, rnd(.74, .9), rnd(.3, .5)] : skinColor(i, nd);
+    addP(p[0] + rnd(-.18, .18), p[1] + rnd(-.18, .18), p[2] + rnd(-.18, .18), rnd(-.3, .3), em ? rnd(.4, 1.2) : rnd(-.3, .3), rnd(-.3, .3), em ? rnd(.45, .85) : rnd(.35, .6), em ? rnd(.12, .2) : rnd(.1, .16), c[0], c[1], c[2], em ? 3.35 : 3.1, em ? -1.5 : 0);
   }
 }
 const specials = () => SPECIALS.filter(sd => G.P[sd.id] > 0);
@@ -881,7 +888,7 @@ function buildFX() {
   let n = 0; const F = instF;
   const put = (x, y, z, s, r, g, b, gl_) => { if (n >= FXMAX) return; const o = n++ * 8; F[o] = x; F[o+1] = y; F[o+2] = z; F[o+3] = s; F[o+4] = r; F[o+5] = g; F[o+6] = b; F[o+7] = gl_; };
   const nd = finished ? 0 : Math.min(G.L.drone, 24);
-  for (let i = 0; i < nd; i++) { const p = dronePos(i, T), c = skinColor(i, nd); put(p[0], p[1], p[2], 0.55, c[0], c[1], c[2], 3.0); }
+  for (let i = 0; i < nd; i++) { const p = dronePos(i, T), c = skinColor(i, nd); put(p[0], p[1], p[2], 0.55, c[0], c[1], c[2], droneGlow(i)); }
   if (!finished) specials().forEach((sd, n) => {
     const p = specialPos(n, T), c = sd.c;
     put(p[0], p[1], p[2], 1.15, c[0], c[1], c[2], 0);
@@ -1135,7 +1142,7 @@ function effText(u, a, b) {
     case 'dspd':  return `${fmtX(rateAt(a))} → ${fmtX(rateAt(b))} Schläge/s je Drohne`;
     case 'gold':  return `Münzen ×${fmtX(goldAt(a))} → ×${fmtX(goldAt(b))}`;
     case 'combo': return `Combo bis ${capAt(a)} → ${capAt(b)} (max ×${fmtX(1 + 0.02 * capAt(b))})`;
-    case 'blast': return a === 0 ? `Fähigkeit: sprengt einen Krater (Radius ${fmtX(blastRAt(1))})` : `Radius ${fmtX(blastRAt(a))} → ${fmtX(blastRAt(b))} · Abklingzeit ${blastCdAt(b)} s`;
+    case 'blast': return a === 0 ? `Fähigkeit: sprengt einen Krater (Radius ${fmtX(blastRAt(1))})` : `Radius ${fmtX(blastRAt(a))} → ${fmtX(blastRAt(b))} · Abklingzeit ${fmtTime(blastCdAt(b))}`;
     case 'night': return `Drohnen arbeiten offline ${nightAt(a)} → ${nightAt(b)} Std`;
   }
 }
@@ -1145,7 +1152,7 @@ function maxedText(u) {
     case 'rad': return `Trifft ${RAD_COUNT[l]} Würfelchen pro Tipp`;
     case 'dspd': return `${fmtX(rateAt(l))} Schläge/s je Drohne`;
     case 'combo': return `Combo bis ${capAt(l)}`;
-    case 'blast': return `Radius ${fmtX(blastRAt(l))} · Abklingzeit ${blastCdAt(l)} s`;
+    case 'blast': return `Radius ${fmtX(blastRAt(l))} · Abklingzeit ${fmtTime(blastCdAt(l))}`;
     case 'night': return `Drohnen arbeiten offline ${nightAt(l)} Std`;
     default: return 'Höchste Stufe';
   }
@@ -1212,7 +1219,7 @@ function perkEff(p, a, b) {
   switch (p.id) {
     case 'laser':  return a === 0 ? 'Brennt alle 8 s eine ganze Reihe Würfelchen weg' : `Alle ${9 - a} → ${9 - b} s, Schaden ×${fmtX(laserMul(a))} → ×${fmtX(laserMul(b))}`;
     case 'seeker': return a === 0 ? 'Holt goldene Würfelchen, die du verpasst, und lässt sie öfter erscheinen' : `Gold etwa alle ${Math.round(goldGap(a))} → ${Math.round(goldGap(b))} s, Fund +${25 * a} → +${25 * b} %`;
-    case 'bomber': return a === 0 ? 'Wirft alle 44 s eine Sprengladung, auch ohne Werkstatt-Kauf' : `Wirft alle ${50 - 6 * a} → ${50 - 6 * b} s eine Ladung`;
+    case 'bomber': return a === 0 ? `Wirft alle ${fmtTime(bomberSec(1))} eine Sprengladung, auch ohne Werkstatt-Kauf` : `Wirft alle ${fmtTime(bomberSec(a))} → ${fmtTime(bomberSec(b))} eine Ladung`;
     case 'km':     return `Schaden ×${fmtX(Math.pow(1.15, a))} → ×${fmtX(Math.pow(1.15, b))} für Tipps und alle Drohnen`;
     case 'kr':     return `Münzen ×${fmtX(Math.pow(1.15, a))} → ×${fmtX(Math.pow(1.15, b))}`;
     case 'swarm':  return a === 0 ? 'Jeder neue Würfel startet mit 3 Drohnen' : `Jeder Würfel startet mit ${3 * a} → ${3 * b} Drohnen`;
@@ -1226,7 +1233,7 @@ function perkMaxed(p) {
   switch (p.id) {
     case 'laser':  return `Alle ${9 - l} s, Schaden ×${fmtX(laserMul(l))}`;
     case 'seeker': return `Gold etwa alle ${Math.round(goldGap(l))} s, Fund +${25 * l} %`;
-    case 'bomber': return `Wirft alle ${50 - 6 * l} s eine Ladung`;
+    case 'bomber': return `Wirft alle ${fmtTime(bomberSec(l))} eine Ladung`;
     case 'swarm':  return `Jeder Würfel startet mit ${3 * l} Drohnen`;
     case 'capital':return `Jeder Würfel startet mit ${fmt(capitalAt(l))} Münzen`;
     case 'longnight': return `Drohnen arbeiten offline +${2 * l} Std länger`;
@@ -1284,7 +1291,7 @@ function buyPerk(p) {
   switch (p.id) {
     case 'laser':  if (l === 0) { laserCd = 1.5; toast('Die <b>Laserdrohne</b> fliegt jetzt mit.', 'gem'); } break;
     case 'seeker': if (l === 0) toast('Der <b>Goldsucher</b> hält Ausschau nach goldenen Würfelchen.', 'gem'); goldenTimer = Math.min(goldenTimer, goldGap(G.P.seeker)); break;
-    case 'bomber': if (l === 0) { bomberCd = 4; toast('Die <b>Sprengdrohne</b> fliegt jetzt mit.', 'gem'); } break;
+    case 'bomber': if (l === 0) { bomberCd = 4; toast('Die <b>Sprengdrohne</b> fliegt jetzt mit.', 'gem'); } else bomberCd = Math.min(bomberCd, bomberInt()); break;
     case 'swarm':  if (!finished) { G.L.drone += 3; toast('<b>+3 Drohnen</b>, ab jetzt bei jedem neuen Würfel.', 'gem'); } break;
     case 'capital':if (!finished) { const g = capitalAt(G.P.capital); G.coins += g; toast(`<b>+${fmt(g)}</b> Münzen, ab jetzt bei jedem neuen Würfel.`, 'gem'); } break;
     case 'robot':  G.robotOn = true; robotT = 0.6; toast('Der <b>Werkstattroboter</b> kauft jetzt für dich ein. Ausschalten kannst du ihn in der Werkstatt.', 'gem', 3.4); break;
@@ -1325,12 +1332,12 @@ function updBlast() {
   $('blastIco').innerHTML = svg(lock ? 'lock' : 'blast');
   const f = lock ? 0 : blastLeft > 0 ? 1 - blastLeft / blastCdAt(G.L.blast) : 1;
   ring.style.strokeDashoffset = (157.08 * (1 - f)).toFixed(1);
-  b.setAttribute('aria-label', lock ? 'Sprengladung (in der Werkstatt freischalten)' : blastLeft > 0 ? `Sprengladung lädt, noch ${Math.ceil(blastLeft)} s` : 'Sprengladung zünden');
+  b.setAttribute('aria-label', lock ? 'Sprengladung (in der Werkstatt freischalten)' : blastLeft > 0 ? `Sprengladung lädt, noch ${fmtCd(blastLeft)}` : 'Sprengladung zünden');
 }
 $('blastBtn').addEventListener('click', () => {
   unlockAudio();
   if (G.L.blast === 0) { toast('Die <b>Sprengladung</b> gibt es in der Werkstatt.'); return; }
-  if (blastLeft > 0) { toast(`Die Sprengladung lädt noch ${Math.ceil(blastLeft)} s.`); return; }
+  if (blastLeft > 0) { toast(`Die Sprengladung lädt noch ${fmtCd(blastLeft)}.`); return; }
   blastArmed = !blastArmed; if (blastArmed) toast('Scharf! Tippe auf die Stelle, die du sprengen willst.');
   updBlast();
 });
@@ -1500,7 +1507,7 @@ function snapshot() {
   const ids = Array.from(act.subarray(0, actLen));
   return { v: 1, c: G.c, layer: G.layer, coins: G.coins, total: G.total, L: { ...G.L }, stats: { ...G.stats }, sound: G.sound, intro: G.intro,
     cr: G.cr, crTotal: G.crTotal, P: { ...G.P }, skins: G.skins.slice(), skin: G.skin, robotOn: G.robotOn, golden: G.golden,
-    blastLeft, fin: finished, act: ids, hp: ids.map(i => +hp[i].toPrecision(6)), last: Date.now() };
+    blastLeft, bomberCd, fin: finished, act: ids, hp: ids.map(i => +hp[i].toPrecision(6)), last: Date.now() };
 }
 let booted = false, retroGrant = 0;
 function save() { if (booted) store.set(snapshot()); }
@@ -1508,7 +1515,7 @@ function restore(s) {
   G.c = s.c | 0; G.layer = s.layer | 0; G.coins = +s.coins || 0; G.total = +s.total || 0;
   for (const k in G.L) G.L[k] = (s.L && s.L[k]) | 0;
   G.stats = Object.assign({ taps: 0, removed: 0, playSec: 0, cubeSec: 0, bestCombo: 0, golden: 0 }, s.stats || {});
-  G.sound = s.sound !== false; G.intro = !!s.intro; blastLeft = +s.blastLeft || 0;
+  G.sound = s.sound !== false; G.intro = !!s.intro; blastLeft = +s.blastLeft || 0; if (+s.bomberCd > 0) bomberCd = +s.bomberCd;
   G.P = defaultP(); if (s.P) for (const k in G.P) G.P[k] = Math.min(PERKS.find(p => p.id === k).max, s.P[k] | 0);
   G.cr = +s.cr || 0; G.crTotal = +s.crTotal || 0; G.golden = s.golden | 0; G.robotOn = s.robotOn !== false;
   G.skins = ['ice'].concat((Array.isArray(s.skins) ? s.skins : []).filter(id => id !== 'ice' && SKINS.some(k => k.id === id)));
@@ -1616,6 +1623,8 @@ async function start(hot) {
   if (!G.intro) $('hint').hidden = false;
   if (s && s.last) {
     const away = (Date.now() - s.last) / 1000;
+    if (blastLeft > 0) { blastLeft = Math.max(0, blastLeft - Math.max(0, away)); updBlast(); }
+    if (away > 0) bomberCd = Math.max(3, bomberCd - away);
     if (away > 5) catchUp(away, away >= 60);
   }
   if (retroGrant > 0) {

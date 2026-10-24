@@ -819,7 +819,7 @@ function droneTrails(dt) {
   for (let i = 0; i < nd; i++) {
     const em = sk.trail === 'ember';
     if (Math.random() > dt * (em ? 15 : 7)) continue;
-    const p = dronePos(i, T);
+    const p = DR[i] ? DR[i].p : dronePos(i, T);
     const c = em ? [1, rnd(.32, .72), rnd(.06, .16)] : sk.trail === 'gold' ? [1, rnd(.74, .9), rnd(.3, .5)] : skinColor(i, nd);
     addP(p[0] + rnd(-.18, .18), p[1] + rnd(-.18, .18), p[2] + rnd(-.18, .18), rnd(-.3, .3), em ? rnd(.4, 1.2) : rnd(-.3, .3), rnd(-.3, .3), em ? rnd(.45, .85) : rnd(.35, .6), em ? rnd(.12, .2) : rnd(.1, .16), c[0], c[1], c[2], em ? 3.35 : 3.1, em ? -1.5 : 0);
   }
@@ -842,7 +842,7 @@ const lerp3 = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, 
 // Schwebepunkt vor einem Würfelchen, entlang der Seitennormalen
 const hoverAt = (w, n, dist) => [w[0] + n[0] * dist, w[1] + n[1] * dist, w[2] + n[2] * dist];
 // ein Flugschritt Richtung Ziel; true, sobald die Drohne angekommen ist
-function flyStep(st, goal, dt) {
+function flyStep(st, goal, dt, margin = 1.3) {
   const p = st.p, r0 = Math.hypot(p[0], p[1], p[2]) || 1, r1 = Math.hypot(goal[0], goal[1], goal[2]) || 1;
   const d0 = p.map(v => v / r0);
   let d1 = goal.map(v => v / r1), dot = clamp(dot3(d0, d1), -1, 1);
@@ -855,7 +855,7 @@ function flyStep(st, goal, dt) {
   let d = d1;
   if (ang > 1e-4) { const sn = Math.sin(ang), w0 = Math.sin(ang - step) / sn, w1 = Math.sin(step) / sn; d = [d0[0]*w0 + d1[0]*w1, d0[1]*w0 + d1[1]*w1, d0[2]*w0 + d1[2]*w1]; }
   let r = r0 + (r1 - r0) * (1 - Math.exp(-dt * 4));
-  const half = (N - 2 * Math.min(G.layer, S - 1)) / 2 + 1.3, m = Math.max(Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2]));
+  const half = (N - 2 * Math.min(G.layer, S - 1)) / 2 + margin, m = Math.max(Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2]));
   if (r * m < half) r = half / m;
   st.p = [d[0] * r, d[1] * r, d[2] * r];
   return ang - step < 0.03 && Math.abs(r - r1) < 0.3;
@@ -876,6 +876,61 @@ function updSpecials(dt) {
     if (id === 'bomber' && st.job) bomberWork(dt, st, st.job);
   }
   updBomb(dt);
+}
+
+// Kleine Bohrdrohnen: jede sichtbare Drohne fliegt zu einem Würfelchen, schwebt davor
+// und baut es ab. Danach nimmt sie ein Nachbar-Würfelchen oder fliegt weiter.
+const DR = [], CLAIM = new Set();
+function resetDrones() { DR.length = 0; CLAIM.clear(); droneAcc = 0; }
+const minable = idx => idx >= 0 && idx !== golden && alive[idx] && shellOf[idx] === G.layer;
+function nearTarget(from) {
+  const ci = ix(from), cj = jy(from), ck = kz(from);
+  let best = -1, bd = 99;
+  for (let dk = -2; dk <= 2; dk++) { const k = ck + dk; if (k < 0 || k >= N) continue;
+    for (let dj = -2; dj <= 2; dj++) { const j = cj + dj; if (j < 0 || j >= N) continue;
+      for (let di = -2; di <= 2; di++) { const i = ci + di; if (i < 0 || i >= N) continue;
+        const dd = di*di + dj*dj + dk*dk; if (dd >= bd) continue;
+        const idx = i + N * (j + N * k);
+        if (minable(idx) && !CLAIM.has(idx)) { best = idx; bd = dd; }
+  } } }
+  return best;
+}
+function farTarget(p) {
+  let best = -1, bd = 1e9, any = -1;
+  for (let q = 0; q < 20 && actLen > 0; q++) {
+    const idx = act[(Math.random() * actLen) | 0]; if (!minable(idx)) continue;
+    if (any < 0) any = idx;
+    if (CLAIM.has(idx)) continue;
+    const w = worldOf(idx), dd = (w[0]-p[0])**2 + (w[1]-p[1])**2 + (w[2]-p[2])**2;
+    if (dd < bd) { bd = dd; best = idx; }
+  }
+  return best >= 0 ? best : any;
+}
+// neues Ziel; true, wenn es direkt nebenan liegt (dann kann die Drohne gleich weiterarbeiten)
+function retarget(d) {
+  const old = d.tgt; if (old >= 0) CLAIM.delete(old);
+  let t = old >= 0 ? nearTarget(old) : -1, near = t >= 0;
+  if (t < 0) t = farTarget(d.p);
+  d.tgt = t; if (t >= 0) CLAIM.add(t);
+  if (!near) d.ok = false;
+  return near;
+}
+function droneGoal(d, i) {
+  const w = worldOf(d.tgt), n = normalOf(d.tgt), bob = Math.sin(T * 4 + i * 1.7) * .07;
+  return [w[0] + n[0] * 1.5, w[1] + n[1] * 1.5 + bob, w[2] + n[2] * 1.5];
+}
+function updDrones(dt) {
+  const V = finished ? 0 : Math.min(G.L.drone, 24);
+  while (DR.length > V) { const d = DR.pop(); CLAIM.delete(d.tgt); }
+  while (DR.length < V) DR.push({ p: dronePos(DR.length, T), tgt: -1, ok: false, beamed: false });
+  for (let i = 0; i < DR.length; i++) {
+    const d = DR[i]; d.beamed = false;
+    if (!minable(d.tgt) && actLen > 0) retarget(d);
+    if (!minable(d.tgt)) { if (d.tgt >= 0) CLAIM.delete(d.tgt); d.tgt = -1; }
+    const goal = d.tgt >= 0 ? droneGoal(d, i) : dronePos(i, T);
+    flyStep(d, goal, dt, .6);
+    d.ok = d.tgt >= 0 && Math.hypot(d.p[0] - goal[0], d.p[1] - goal[1], d.p[2] - goal[2]) < 1.2;
+  }
 }
 
 // Laserdrohne: stellt sich vor eine Würfelseite und fährt mit dem Strahl
@@ -1008,7 +1063,7 @@ function buildFX() {
   let n = 0; const F = instF;
   const put = (x, y, z, s, r, g, b, gl_) => { if (n >= FXMAX) return; const o = n++ * 8; F[o] = x; F[o+1] = y; F[o+2] = z; F[o+3] = s; F[o+4] = r; F[o+5] = g; F[o+6] = b; F[o+7] = gl_; };
   const nd = finished ? 0 : Math.min(G.L.drone, 24);
-  for (let i = 0; i < nd; i++) { const p = dronePos(i, T), c = skinColor(i, nd); put(p[0], p[1], p[2], 0.55, c[0], c[1], c[2], droneGlow(i)); }
+  for (let i = 0; i < nd; i++) { const p = DR[i] ? DR[i].p : dronePos(i, T), c = skinColor(i, nd); put(p[0], p[1], p[2], 0.55, c[0], c[1], c[2], droneGlow(i)); }
   if (!finished) specials().forEach((sd, n) => {
     const st = SD[sd.id], p = st && st.p ? st.p : specialPos(n, T), c = sd.c;
     put(p[0], p[1], p[2], 1.15, c[0], c[1], c[2], 0);
@@ -1551,7 +1606,7 @@ function prestige(reward) {
   G.c++; G.coins = capitalAt(G.P.capital); G.layer = 0; G.frenzy = 0; G.stats.cubeSec = 0; G.golden = 0;
   for (const k in G.L) G.L[k] = 0;
   G.L.drone = 3 * G.P.swarm;
-  blastLeft = 0; blastArmed = false; combo = 0; pN = 0; laserCd = 3; bomberCd = 10; goldenTimer = 40; resetSpecials();
+  blastLeft = 0; blastArmed = false; combo = 0; pN = 0; laserCd = 3; bomberCd = 10; goldenTimer = 40; resetSpecials(); resetDrones();
   buildCube(G.c); activateShell(0);
   fitTarget = fitFor(N); cam.fit = fitTarget * 1.6;
   renderShop(); updBlast(); updHUD(); save();
@@ -1682,20 +1737,29 @@ function update(dt) {
   if (cam.shake > 0) cam.shake = Math.max(0, cam.shake - dt);
   if (pendingDone && !finished) layerComplete(false);
   // Drohnen
+  updDrones(dt);
   if (!finished && G.L.drone > 0 && actLen > 0) {
-    droneAcc += G.L.drone * droneRate() * dt;
-    let n = Math.floor(droneAcc); droneAcc -= n;
-    if (n > 0) {
-      let d = droneDmg() * frenzyMul(); if (n > 300) { d *= n / 300; n = 300; }
-      let beams = 0;
-      for (let h = 0; h < n && actLen > 0 && !finished; h++) {
-        let idx = act[(Math.random() * actLen) | 0];
-        if (idx === golden) { if (actLen < 2) continue; idx = act[(Math.random() * actLen) | 0]; if (idx === golden) continue; }
-        const g = hitVoxel(idx, d, 1, 1);
-        if (beams < 2) { beam(idx); beams++; }
+    const perSec = G.L.drone * droneRate();
+    droneAcc = Math.min(droneAcc + perSec * dt, perSec * 2 + 1); // Treffer warten, solange alle Drohnen fliegen
+    const raw = Math.floor(droneAcc), work = DR.filter(x => x.ok);
+    if (raw > 0 && work.length) {
+      const n = Math.min(raw, 300), scale = raw / n, dmg = droneDmg() * frenzyMul() * scale, nd = DR.length;
+      let used = 0, beams = 0, w = 0, idle = 0;
+      while (used < n && actLen > 0 && !finished && idle < work.length) {
+        const dd = work[w++ % work.length];
+        if (!dd.ok) { idle++; continue; }
+        if (!minable(dd.tgt) && !retarget(dd)) { idle++; continue; }
+        idle = 0;
+        const idx = dd.tgt, g = hitVoxel(idx, dmg, 1, 1); used++;
+        if (!dd.beamed && beams < 12) {
+          const v = worldOf(idx), nn = normalOf(idx);
+          beamLine(dd.p, [v[0] + nn[0] * .46, v[1] + nn[1] * .46, v[2] + nn[2] * .46], skinColor(DR.indexOf(dd), nd), 3, .1);
+          dd.beamed = true; beams++;
+        }
         if (g) sfx.plink();
         if (pendingDone) layerComplete(false);
       }
+      droneAcc -= used * scale;
     }
   }
   // Goldene Würfelchen
@@ -1725,7 +1789,7 @@ function update(dt) {
   if (!reduceMotion && cam.idle > 7 && ptrs.size === 0) cam.yaw += dt * 0.07 * Math.min(1, (cam.idle - 7) / 3);
   if (finished && !reduceMotion) cam.yaw += dt * 0.15;
 }
-let droneAcc = 0;
+var droneAcc = 0;
 function frame(ts) {
   requestAnimationFrame(frame);
   if (!lastTs) lastTs = ts;
@@ -1776,7 +1840,7 @@ async function start(hot) {
   if (finished) setTimeout(showFinale, 800);
   save();
   requestAnimationFrame(frame);
-  if (location.hash === '#test') window.__nw = { G, doTap, spawnGolden, renderMenu, openSheet, openForge, fireLaser, dropBomb, prestige, showFinale, catchUp, get N() { return N; }, get actLen() { return actLen; }, get finished() { return finished; }, layerComplete, updShop, updHUD, cam, rawPick: pick, get sd() { return SD; }, get golden() { return golden; }, get goldenLife() { return goldenLife; } };
+  if (location.hash === '#test') window.__nw = { G, doTap, spawnGolden, renderMenu, openSheet, openForge, fireLaser, dropBomb, prestige, showFinale, catchUp, get N() { return N; }, get actLen() { return actLen; }, get finished() { return finished; }, layerComplete, updShop, updHUD, cam, rawPick: pick, get sd() { return SD; }, get dr() { return DR; }, get golden() { return golden; }, get goldenLife() { return goldenLife; } };
 }
 try { window.claude?.hot?.snapshot?.(() => ({ save: snapshot() })); } catch (e) {}
 const hotApi = window.claude?.hot;

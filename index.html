@@ -317,12 +317,12 @@ const svg = (k, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidd
 
 // Upgrades: Kosten = base * g^Stufe (oder feste Kostenliste)
 const UPS = [
-  { id:'dmg',   name:'Meißel',          base:20,   g:1.30, max:500, need:null },
+  { id:'dmg',   name:'Meißel',          base:20,   g:1.18, max:500, need:null },
   { id:'rad',   name:'Breiter Meißel',  costs:[50, 1200, 16000, 240000, 4e6, 8e7], max:6, need:null },
-  { id:'drone', name:'Bohrdrohne',      base:80,   g:1.28, max:500, need:null },
-  { id:'ddmg',  name:'Diamantbohrer',   base:160,  g:1.30, max:500, need:'drone' },
-  { id:'dspd',  name:'Drohnentakt',     base:600,  g:2.00, max:15,  need:'drone' },
-  { id:'gold',  name:'Goldader',        base:1600, g:3.20, max:200, need:null },
+  { id:'drone', name:'Bohrdrohne',      base:80,   g:1.17, max:500, need:null },
+  { id:'ddmg',  name:'Diamantbohrer',   base:160,  g:1.18, max:500, need:'drone' },
+  { id:'dspd',  name:'Drohnentakt',     base:600,  g:2.00, max:20,  need:'drone' },
+  { id:'gold',  name:'Goldader',        base:1600, g:2.60, max:200, need:null },
   { id:'combo', name:'Rhythmus',        base:300,  g:3.00, max:9,   need:null },
   { id:'blast', name:'Sprengladung',    base:400,  g:2.40, max:10,  need:null },
   { id:'night', name:'Nachtschicht',    base:500,  g:1.90, max:11,  need:'drone' },
@@ -399,10 +399,11 @@ const cubeN    = c => Math.min(20 + 4*c, 36);
 const dep      = s => S > 1 ? s * 9 / (S - 1) : s;
 const hpOf     = s => Math.max(1, Math.round(Math.pow(2.6, dep(s)) * Math.pow(6, G.c)));
 const valOf    = s => Math.max(1, Math.round(2 * Math.pow(2.2, dep(s)) * Math.pow(6, G.c)));
-const neuCoin  = c => Math.pow(1.5, c);
-const neuDmg   = c => Math.pow(1.4, c);
-const permCoin = () => neuCoin(G.c) * Math.pow(1.15, G.P.kr);
-const permDmg  = () => neuDmg(G.c) * Math.pow(1.15, G.P.km);
+const neuCoin  = c => Math.pow(1.8, c);
+const neuDmg   = c => Math.pow(1.8, c);
+const PERK_G   = 1.25; // Kristallmeißel und Kernresonanz je Stufe
+const permCoin = () => neuCoin(G.c) * Math.pow(PERK_G, G.P.kr);
+const permDmg  = () => neuDmg(G.c) * Math.pow(PERK_G, G.P.km);
 const crystalsFor = c => Math.round(10 * Math.pow(1.3, c));
 const capitalAt = l => l > 0 ? 500 * Math.pow(10, l - 1) : 0;
 const laserInt  = () => 9 - G.P.laser;
@@ -410,7 +411,9 @@ const laserMul  = l => 4 * (1 + 0.5 * (l - 1));
 const bomberSec = l => 600 - 90 * (l - 1);
 const bomberInt = () => bomberSec(G.P.bomber);
 const goldGap   = l => 67.5 * (1 - 0.1 * l);
-const ms       = l => Math.pow(2, Math.floor(l / 25));
+const MS_EVERY = 25; // alle 25 Stufen verdoppelt sich der Schaden von Meißel und Diamantbohrer
+const ms       = l => Math.pow(2, Math.floor(l / MS_EVERY));
+const msHint   = (a, b) => Math.floor(b / MS_EVERY) > Math.floor(a / MS_EVERY) ? ' · Meilenstein: ×2!' : ` · ×2 ab Stufe ${(Math.floor(a / MS_EVERY) + 1) * MS_EVERY}`;
 const dmgAt    = l => (l + 1) * ms(l) * permDmg();
 const tapDmg   = () => dmgAt(G.L.dmg);
 const droneDmgAt = l => (l + 1) * ms(l) * permDmg();
@@ -1340,10 +1343,10 @@ function bulk(u) {
 }
 function effText(u, a, b) {
   switch (u.id) {
-    case 'dmg':   return `Schaden pro Tipp ${fmt(dmgAt(a))} → ${fmt(dmgAt(b))}`;
+    case 'dmg':   return `Schaden pro Tipp ${fmt(dmgAt(a))} → ${fmt(dmgAt(b))}${msHint(a, b)}`;
     case 'rad':   return b > a ? `Trifft ${RAD_COUNT[a]} → ${RAD_COUNT[b]} Würfelchen pro Tipp` : `Trifft ${RAD_COUNT[a]} Würfelchen pro Tipp`;
     case 'drone': return `${a} → ${b} Drohnen, sie klopfen von allein`;
-    case 'ddmg':  return `Schaden pro Drohnenschlag ${fmt(droneDmgAt(a))} → ${fmt(droneDmgAt(b))}`;
+    case 'ddmg':  return `Schaden pro Drohnenschlag ${fmt(droneDmgAt(a))} → ${fmt(droneDmgAt(b))}${msHint(a, b)}`;
     case 'dspd':  return `${fmtX(rateAt(a))} → ${fmtX(rateAt(b))} Schläge/s je Drohne`;
     case 'gold':  return `Münzen ×${fmtX(goldAt(a))} → ×${fmtX(goldAt(b))}`;
     case 'combo': return `Combo bis ${capAt(a)} → ${capAt(b)} (max ×${fmtX(1 + 0.02 * capAt(b))})`;
@@ -1389,7 +1392,10 @@ function updShop() {
   }
 }
 function applyBuy(u, n, cost) {
+  const before = G.L[u.id];
   G.coins -= cost; G.L[u.id] += n;
+  if ((u.id === 'dmg' || u.id === 'ddmg') && Math.floor(G.L[u.id] / MS_EVERY) > Math.floor(before / MS_EVERY))
+    toast(`Meilenstein: <b>${u.name}</b> Stufe ${Math.floor(G.L[u.id] / MS_EVERY) * MS_EVERY}, Schaden ×2`, 'gold');
   if (u.id === 'drone' && G.L.drone === n) toast('Die erste <b>Bohrdrohne</b> fliegt. Sie arbeitet auch, wenn du weg bist.');
   if (u.id === 'blast' && G.L.blast === n) { blastLeft = 0; toast('<b>Sprengladung</b> bereit: unten rechts antippen, dann auf den Würfel.'); }
 }
@@ -1425,8 +1431,8 @@ function perkEff(p, a, b) {
     case 'laser':  return a === 0 ? 'Brennt alle 8 s eine ganze Reihe Würfelchen weg' : `Alle ${9 - a} → ${9 - b} s, Schaden ×${fmtX(laserMul(a))} → ×${fmtX(laserMul(b))}`;
     case 'seeker': return a === 0 ? 'Holt goldene Würfelchen, die du verpasst, und lässt sie öfter erscheinen' : `Gold etwa alle ${Math.round(goldGap(a))} → ${Math.round(goldGap(b))} s, Fund +${25 * a} → +${25 * b} %`;
     case 'bomber': return a === 0 ? `Wirft alle ${fmtTime(bomberSec(1))} eine Sprengladung, auch ohne Werkstatt-Kauf` : `Wirft alle ${fmtTime(bomberSec(a))} → ${fmtTime(bomberSec(b))} eine Ladung`;
-    case 'km':     return `Schaden ×${fmtX(Math.pow(1.15, a))} → ×${fmtX(Math.pow(1.15, b))} für Tipps und alle Drohnen`;
-    case 'kr':     return `Münzen ×${fmtX(Math.pow(1.15, a))} → ×${fmtX(Math.pow(1.15, b))}`;
+    case 'km':     return `Schaden ×${fmtX(Math.pow(PERK_G, a))} → ×${fmtX(Math.pow(PERK_G, b))} für Tipps und alle Drohnen`;
+    case 'kr':     return `Münzen ×${fmtX(Math.pow(PERK_G, a))} → ×${fmtX(Math.pow(PERK_G, b))}`;
     case 'swarm':  return a === 0 ? 'Jeder neue Würfel startet mit 3 Drohnen' : `Jeder Würfel startet mit ${3 * a} → ${3 * b} Drohnen`;
     case 'capital':return a === 0 ? `Jeder neue Würfel startet mit ${fmt(capitalAt(1))} Münzen` : `Jeder Würfel startet mit ${fmt(capitalAt(a))} → ${fmt(capitalAt(b))} Münzen`;
     case 'longnight': return a === 0 ? 'Drohnen arbeiten offline 2 Std länger' : `Drohnen arbeiten offline +${2 * a} → +${2 * b} Std länger`;
